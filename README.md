@@ -87,3 +87,21 @@ DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 This is because `torch.backends.mps.is_available()` is not available in our `torch` version (v1.11.0) because of our Python 3.8 dependency. So we cannot take advantage of `mps` in our Macbook Pros. 
 
 I have already copied and pasted their requirements into our `environment.yml` so you don't need to install anything. Do update your `drone` conda environment if you have already installed it. 
+
+## Object Segmentation using Segment Anything Model (SAM)
+
+[Segment Anything Model Github Repo](https://github.com/facebookresearch/segment-anything)
+
+1. Get the code via `git clone`
+```bash
+cd ~/tbp
+git clone https://github.com/facebookresearch/segment-anything
+# Note: tbp.drone is at ~/tbp/tbp.drone
+```
+
+2. Download the SAM ViT-B model from [here](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth)
+**Note**: We're using the ViT-B model as it provides a good balance between performance and resource usage when running on CPU.
+
+The model should be placed in the `~/tbp/tbp.drone/models/` directory as `sam_vit_b_01ec64.pth`.
+
+The requirements for SAM have already been added to our `environment.yml`, so you don't need to install anything additional. Just make sure your `drone` conda environment is up to date.
