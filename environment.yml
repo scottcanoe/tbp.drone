@@ -32,3 +32,9 @@ dependencies:
     - -e .[dev]
     - djitellopy
     - opencv-python
+    # From Depth-Anything-V2 requirements.txt (https://github.com/DepthAnything/Depth-Anything-V2)
+    - gradio_imageslider
+    - gradio==4.29.0
+    - matplotlib
+    - torch
+    - torchvision
