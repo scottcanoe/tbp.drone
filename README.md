@@ -48,7 +48,7 @@ conda config --env --set subdir osx-64
 ```
 conda env create -f environment.yml --subdir=osx-64
 conda init
-conda activate paper # TODO: Update to your paper's name
+conda activate drone
 conda config --env --set subdir osx-64
 ```
 
@@ -56,62 +56,34 @@ conda config --env --set subdir osx-64
 ```
 conda env create -f environment.yml
 conda init zsh
-conda activate paper # TODO: Update to your paper's name
+conda activate drone 
 ```
 
 ### Intel (bash shell)
 ```
 conda env create -f environment.yml
 conda init
-conda activate drone # TODO: Update to your paper's name
+conda activate drone 
 ```
 
-## Experiments
+## Estimating Depth using Depth-Anything-v2
 
-Experiments are defined in the `configs` directory.
+[Depth-Anythin-v2 Github Repo](https://github.com/DepthAnything/Depth-Anything-V2)
 
-After installing the environment, to run an experiment, run:
-
+1. Get the code via `git clone`
 ```bash
-python run.py -e <experiment_name>
+cd ~/tbp
+git clone https://github.com/DepthAnything/Depth-Anything-V2
+# Note: tbp.drone is at ~/tbp/tbp.drone
 ```
-
-To run an experiment where episodes are executed in parallel, run:
-
-```bash
-python run_parallel.py -e <experiment_name> -n <num_parallel>
+2. Download the Depth-Anything-V2-Base model from [here](https://huggingface.co/depth-anything/Depth-Anything-V2-Base/resolve/main/depth_anything_v2_vitb.pth?download=true) 
+**Note**: There are bigger models, but we have to run on CPU, so `Base` is a good starting point. 
+**Note**: You will get error for the line in `dpt.py`:
+```python
+DEVICE = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
+# Replace with the following line
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 ```
+This is because `torch.backends.mps.is_available()` is not available in our `torch` version (v1.11.0) because of our Python 3.8 dependency. So we cannot take advantage of `mps` in our Macbook Pros. 
 
-## Development
-
-After installing the environment, you can run the following commands to check your code.
-
-### Run formatter
-
-```bash
-ruff format
-```
-
-### Run style checks
-
-```bash
-ruff check
-```
-
-### Run dependency checks
-
-```bash
-deptry .
-```
-
-### Run static type checks
-
-```bash
-mypy .
-```
-
-### Run tests
-
-```bash
-pytest
-```
+I have already copied and pasted their requirements into our `environment.yml` so you don't need to install anything. Do update your `drone` conda environment if you have already installed it. 
