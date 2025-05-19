@@ -112,6 +112,18 @@ The project includes modules for depth estimation and object segmentation in the
 
 ### Usage
 
+```bash
+# 1. Make sure you have a `picture.png` in tbp.drone directory before running
+
+# The below script will:
+# - Generate a 3D point cloud with semantic labels
+# - Save visualization as pointcloud.png
+cd ~/tbp  # Go to parent directory containing tbp.drone
+PYTHONPATH=$PWD python tbp.drone/src/vision/point_cloud.py
+```
+
+Or you can write your own python file below and feed in any image. 
+
 ```python
 from tbp.drone.vision import DepthTo3DLocations
 
@@ -137,19 +149,6 @@ The module combines both Depth-Anything-V2 and SAM to:
 4. Set the depth of background regions (non-object areas) to a maximum value (default: 100.0)
 
 This is particularly useful for drone navigation where you want to focus on the depth of specific objects while treating the background as far away.
-
-Running the example:
-```bash
-cd ~/tbp/tbp.drone
-PYTHONPATH=/Users/hlee/tbp/tbp.drone python src/vision/point_cloud.py
-```
-
-This will process a sample image and generate:
-- A visualization of the 3D point cloud saved as `pointcloud.png`
-- The point cloud will include:
-  - 3D spatial representation of the segmented object
-  - Color-coding based on semantic labels
-  - Proper scaling and viewpoint for optimal visualization
 
 ## Project Structure
 
