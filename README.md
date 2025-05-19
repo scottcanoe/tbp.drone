@@ -30,37 +30,6 @@ tello = Tello()
 [INFO] tello.py - 129 - Tello instance was initialized. Host: '192.168.10.1'. Port: '8889'.
 ```
 
-## Make it yours
-
-After copying the template, you need to address the following TODOs.
-
-### `environment.yml`
-
-- Update project `name`.
-- Update `thousandbrainsproject::tbp.monty` version.
-- Add any other dependencies.
-
-### `pyproject.toml`
-
-- Update the project `description`
-- Update the project `name`
-- Update the `Repository` and `Issues` URLs
-
-### Delete template images
-
-- Delete `delete_me.png`
-- Delete `delete_me_too.png`
-
-### `README.md`
-
-- Update for your project
-
-### Recommendations
-
-For a cleaner project commit history, go to your repository settings and in the Pull Requests section, only "Allow squash merging". It also helps to set your default commit message to the "Pull request title" option.
-
-![Pull Request Settings](./delete_me_too.png)
-
 ## Installation
 
 The environment for this project is managed with [conda](https://www.anaconda.com/download/success).
@@ -71,7 +40,7 @@ To create the environment, run:
 ```
 conda env create -f environment.yml --subdir=osx-64
 conda init zsh
-conda activate paper # TODO: Update to your paper's name
+conda activate drone
 conda config --env --set subdir osx-64
 ```
 
@@ -94,7 +63,7 @@ conda activate paper # TODO: Update to your paper's name
 ```
 conda env create -f environment.yml
 conda init
-conda activate paper # TODO: Update to your paper's name
+conda activate drone # TODO: Update to your paper's name
 ```
 
 ## Experiments
