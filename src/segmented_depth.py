@@ -75,7 +75,7 @@ class SegmentedDepth:
         return modified_depth, mask, rgb_image
 
 def main():
-    """Example usage of the SegmentedDepth class."""
+    """Example usage of the SegmentedDepth class showing all intermediate outputs."""
     # Initialize segmented depth processor
     processor = SegmentedDepth()
     
@@ -88,35 +88,57 @@ def main():
     center_point = [(w/2, h/2)]
     center_label = [1]  # 1 indicates foreground
     
+    # Get all outputs
     modified_depth, mask, rgb_image = processor.process_image(
         image_path,
         input_points=center_point,
         input_labels=center_label
     )
     
+    # Get original depth map without segmentation
+    original_depth, _ = processor.depth_estimator.estimate_depth(image_path)
+    
     # Visualize and save the results
     import matplotlib.pyplot as plt
-    plt.figure(figsize=(15, 5))
+    plt.figure(figsize=(20, 4))
     
-    plt.subplot(1, 3, 1)
+    # 1. RGB Image
+    plt.subplot(1, 5, 1)
     plt.imshow(cv2.cvtColor(rgb_image, cv2.COLOR_BGR2RGB))
-    plt.plot(center_point[0][0], center_point[0][1], 'rx')  # Show clicked point
-    plt.title("RGB Image with Point Prompt")
+    plt.plot(center_point[0][0], center_point[0][1], 'rx', markersize=10, label='Point Prompt')
+    plt.title("RGB Image")
+    plt.axis('off')
+    plt.legend()
+    
+    # 2. Original Depth Map
+    plt.subplot(1, 5, 2)
+    depth_plot = plt.imshow(original_depth)
+    plt.colorbar(depth_plot, label='Depth')
+    plt.title("Original Depth Map\n(Depth Anything)")
     plt.axis('off')
     
-    plt.subplot(1, 3, 2)
-    plt.imshow(mask)
-    plt.title("Segmentation Mask")
+    # 3. Segmentation Mask
+    plt.subplot(1, 5, 3)
+    plt.imshow(mask, cmap='gray')
+    plt.title("Object Segmentation\n(SAM)")
     plt.axis('off')
     
-    plt.subplot(1, 3, 3)
-    plt.imshow(modified_depth)
-    plt.colorbar(label='Depth')
-    plt.title("Segmented Depth Map")
+    # 4. Modified Depth Map
+    plt.subplot(1, 5, 4)
+    mod_depth_plot = plt.imshow(modified_depth)
+    plt.colorbar(mod_depth_plot, label='Depth')
+    plt.title("Segmented Depth Map\n(Combined)")
+    plt.axis('off')
+    
+    # 5. Overlay visualization
+    plt.subplot(1, 5, 5)
+    plt.imshow(cv2.cvtColor(rgb_image, cv2.COLOR_BGR2RGB))
+    plt.imshow(mask, alpha=0.5, cmap='cool')
+    plt.title("RGB + Segmentation\nOverlay")
     plt.axis('off')
     
     plt.tight_layout()
-    plt.savefig("segmented_depth.png")
+    plt.savefig("segmentation.png", bbox_inches='tight', dpi=300)
     plt.close()
 
 if __name__ == "__main__":
