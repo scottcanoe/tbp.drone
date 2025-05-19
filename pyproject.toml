@@ -15,10 +15,10 @@ classifiers = [
 dependencies = [
     "tbp.monty", # imported via conda (thousandbrainsproject::tbp.monty)
 ]
-description = "Paper repository template" # TODO: Update this description
+description = "Monty Drone Project" # TODO: Update this description
 dynamic = ["version"]
 license = { file = "LICENSE" }
-name = "tbp.monty_paper" # TODO: Update this name
+name = "tbp.drone" # TODO: Update this name
 readme = "README.md"
 
 [project.optional-dependencies]
@@ -39,8 +39,8 @@ dev = [
 ]
 
 [project.urls]
-Repository = "https://github.com/thousandbrainsproject/tbp.monty_paper" # TODO: Update this URL
-Issues = "https://github.com/thousandbrainsproject/tbp.monty_paper/issues" # TODO: Update this URL
+Repository = "https://github.com/hlee9212/tbp.drone" # TODO: Update this URL
+Issues = "https://github.com/hlee9212/tbp.drone/issues" # TODO: Update this URL
 
 [tool.deptry]
 exclude = ["venv", "\\.venv", "\\.direnv", "\\.git", "setup\\.py"]
