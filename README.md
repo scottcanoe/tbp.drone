@@ -1,10 +1,34 @@
-# tbp.monty_paper
+# Codebase for Drone Team
 
-This is a template repository for reproducibility code for papers depending on https://github.com/thousandbrainsproject/tbp.monty.
+Template from tbp.monty paper. Uses tbp.monty version 0.5.0. 
 
-To create a repository from this template, find and click the "Use this template" button:
+## Getting Started
 
-![Use this template](./delete_me.png)
+- Install Tello app from iOS or Android (Optional, but good to get a sense of what the Drone can do). 
+- Python Interfaces to DJI Tello
+	- [DJITelloPy](https://github.com/damiafuentes/DJITelloPy)
+	- Python 2 Project: [Tello-Python](https://github.com/dji-sdk/Tello-Python)
+		- Will likely not use due to Python 2 but may be helpful to look at scripts like `Tello_Video(With_Pose_Recognition)`
+	- Drone Programming with Python: [Youtube 3.5 hours](https://www.youtube.com/watch?v=LmEcyQnfpDA)
+- Very handy resources
+    - Tello User Manual (In drone channel on Slack)
+- [Tello SDK Manual](https://dl-cdn.ryzerobotics.com/downloads/Tello/Tello%20SDK%202.0%20User%20Guide.pdf)
+
+## Working with Monty
+- Setup something similar to the Paper Repo Template (to use a certain version of Monty for reproducibility).
+- **Notes**: 
+	- When working with drone, computer must be connected to Wifi: `TELLO-xxxx` (there will be no internet access)
+	- Bluetooth must be off (at least true for my Mac)
+- Update dependencies:
+	- `pip install djitellopy`
+
+### DJITelloPy Notes
+```
+tello = Tello()
+
+# Output
+[INFO] tello.py - 129 - Tello instance was initialized. Host: '192.168.10.1'. Port: '8889'.
+```
 
 ## Make it yours
 

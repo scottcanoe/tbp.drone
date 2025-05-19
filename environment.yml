@@ -16,7 +16,7 @@
 # Finally, activate the environment with:
 #     $ conda activate paper # TODO: Update to your paper's name
 #
-name: paper # TODO: Update to your paper's name
+name: drone # TODO: Update to your paper's name
 channels:
   - aihabitat
   - pytorch
@@ -26,7 +26,9 @@ channels:
   - thousandbrainsproject
 
 dependencies:
-  - thousandbrainsproject::tbp.monty==0.0.3 # TODO: Pin to desired tbp.monty version for reproducibility
+  - thousandbrainsproject::tbp.monty==0.5.0 # TODO: Pin to desired tbp.monty version for reproducibility
   - pip
   - pip:
     - -e .[dev]
+    - djitellopy
+    - opencv-python
