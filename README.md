@@ -147,3 +147,52 @@ This will process a sample image and save three visualizations:
 - The original RGB image with the point prompt
 - The segmentation mask
 - The modified depth map where background has maximum depth
+
+## 3D Point Cloud Generation
+
+The project includes a module for converting depth images into 3D point clouds with semantic labels in `src/depth_to_3d.py`. This module combines depth estimation and object segmentation to create semantically labeled 3D point clouds.
+
+### Usage
+
+```python
+from src.depth_to_3d import DepthTo3DLocations
+
+# Initialize the processor with camera parameters
+processor = DepthTo3DLocations(
+    resolution=(1080, 1920),  # Height, Width format
+    focal_length_pixels=1825.1,  # Calculated from physical parameters
+    optical_center=(960.0, 540.0),  # cx, cy
+    zoom=1.0,
+    get_all_points=False  # Only return object points, not background
+)
+
+# Process an image with point prompts for segmentation
+image_path = "path/to/image.png"
+input_points = [(960, 540)]  # Center point
+input_labels = [1]  # 1 indicates foreground
+
+# Get 3D point cloud with semantic labels
+points_3d = processor(
+    image_path,
+    input_points=input_points,
+    input_labels=input_labels
+)
+```
+
+The module provides the following functionality:
+1. Takes an RGB image and transforms it into a 3D point cloud
+2. Each point in the cloud has both spatial coordinates (x, y, z) and a semantic label
+3. Uses the camera intrinsics for DJI Tello camera
+4. Integrates with DepthAnything V2 and SAM for depth estimation and segmentation
+5. Returns an Nx4 numpy array where each point is [x, y, z, semantic_id]
+
+Running the example:
+```bash
+cd ~/tbp/tbp.drone
+PYTHONPATH=/Users/hlee/tbp/tbp.drone python src/depth_to_3d.py
+```
+
+This will process a sample image and generate a visualization of the 3D point cloud saved as `pointcloud.png`. The visualization includes:
+- 3D spatial representation of the segmented object
+- Color-coding based on semantic labels
+- Proper scaling and viewpoint for optimal visualization

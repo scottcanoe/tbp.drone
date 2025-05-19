@@ -8,9 +8,8 @@ from pathlib import Path
 from typing import Union, Tuple, Optional, List
 import numpy.typing as npt
 
-# Add the path to segment-anything module
-sam_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../segment-anything'))
-sys.path.insert(0, sam_path)
+from configs.paths import SEGMENT_ANYTHING_PATH
+sys.path.insert(0, SEGMENT_ANYTHING_PATH)
 
 from segment_anything import SamPredictor, sam_model_registry
 

@@ -8,9 +8,8 @@ from pathlib import Path
 from typing import Union, Tuple, Optional
 import numpy.typing as npt
 
-# Assuming Depth-Anything-V2 folder is at the same level as tbp.drone
-depth_anything_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../Depth-Anything-V2'))
-sys.path.insert(0, depth_anything_path)
+from configs.paths import DEPTH_ANYTHING_PATH
+sys.path.insert(0, DEPTH_ANYTHING_PATH)
 
 from depth_anything_v2.dpt import DepthAnythingV2
 
@@ -81,6 +80,7 @@ def main():
     # Process an example image
     image_path = str(Path("~/tbp/tbp.drone/picture.png").expanduser())
     depth_map, rgb_image = depth_estimator.estimate_depth(image_path)
+    print(depth_map.shape)
     
     # Visualize and save the depth map
     import matplotlib.pyplot as plt

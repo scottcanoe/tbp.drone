@@ -61,11 +61,13 @@ class SegmentedDepth:
         depth_map, rgb_image = self.depth_estimator.estimate_depth(image)
         
         # Get segmentation mask
+        h, w = rgb_image.shape[:2]
+        center_point = [(w/2, h/2)]
+        center_label = [1]  # 1 indicates foreground    
         mask, _ = self.object_segmenter.segment_image(
             rgb_image,
-            input_points=input_points,
-            input_boxes=input_boxes,
-            input_labels=input_labels
+            input_points=center_point,
+            input_labels=center_label
         )
         
         # Create modified depth map where background (non-object) has max depth
