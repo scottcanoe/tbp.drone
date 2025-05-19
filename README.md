@@ -105,3 +105,45 @@ git clone https://github.com/facebookresearch/segment-anything
 The model should be placed in the `~/tbp/tbp.drone/models/` directory as `sam_vit_b_01ec64.pth`.
 
 The requirements for SAM have already been added to our `environment.yml`, so you don't need to install anything additional. Just make sure your `drone` conda environment is up to date.
+
+## Combined Depth Estimation and Object Segmentation
+
+The project includes a combined depth estimation and object segmentation module in `src/segmented_depth.py`. This module creates depth maps where the background (non-object regions) is set to a maximum depth value.
+
+### Usage
+
+```python
+from src.segmented_depth import SegmentedDepth
+
+# Initialize the processor (default max_depth is 100.0)
+processor = SegmentedDepth()
+
+# Process an image with a point prompt
+# You can specify where to segment the object using input points
+center_point = [(image_width/2, image_height/2)]  # Point in center of image
+center_label = [1]  # 1 indicates foreground
+
+modified_depth, mask, rgb_image = processor.process_image(
+    "path/to/image.png",
+    input_points=center_point,
+    input_labels=center_label
+)
+```
+
+The module combines both Depth-Anything-V2 and SAM to:
+1. Estimate depth for the entire image
+2. Segment objects of interest
+3. Set the depth of background regions (non-object areas) to a maximum value (default: 100.0)
+
+This is particularly useful for drone navigation where you want to focus on the depth of specific objects while treating the background as far away.
+
+Running the example:
+```bash
+cd ~/tbp/tbp.drone
+PYTHONPATH=/Users/hlee/tbp/tbp.drone python src/segmented_depth.py
+```
+
+This will process a sample image and save three visualizations:
+- The original RGB image with the point prompt
+- The segmentation mask
+- The modified depth map where background has maximum depth
