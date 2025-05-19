@@ -5,9 +5,10 @@ from pathlib import Path
 from typing import Union, Tuple, Optional, List
 import numpy.typing as npt
 
-from segmented_depth import SegmentedDepth
+from .depth_processing.depth_estimator import DepthEstimator
+from .depth_processing.object_segmenter import ObjectSegmenter
 
-class DepthTo3DLocations:
+class DroneDepthTo3DLocations:
     """Transform RGB image into 3D point cloud with semantic labels.
     
     This class takes an RGB image and transforms it into a 3D point cloud where each point
@@ -24,6 +25,7 @@ class DepthTo3DLocations:
         cy: Optical center y-coordinate in pixels (cy)
         zoom: Camera zoom factor. Default 1.0 (no zoom)
         get_all_points: Whether to return all 3D coordinates or only object points
+        max_depth: Maximum depth value to use for background points
     """
     
     def __init__(
@@ -33,6 +35,9 @@ class DepthTo3DLocations:
         optical_center: Tuple[float, float] = (960.0, 540.0),  # cx, cy
         zoom: float = 1.0,
         get_all_points: bool = False,
+        max_depth: float = 100.0,
+        depth_model_path: Optional[str] = None,
+        sam_model_path: Optional[str] = None,
     ):
         """Initialize the 3D point cloud generator.
         
@@ -42,15 +47,20 @@ class DepthTo3DLocations:
             optical_center: Optical center in pixels (cx, cy)
             zoom: Camera zoom factor
             get_all_points: If True, return all points including background
+            max_depth: Maximum depth value for background points
+            depth_model_path: Path to depth model weights
+            sam_model_path: Path to SAM model weights
         """
         self.resolution = resolution
         self.focal_length = focal_length_pixels
         self.cx, self.cy = optical_center
         self.zoom = zoom
         self.get_all_points = get_all_points
+        self.max_depth = max_depth
         
-        # Initialize segmented depth processor
-        self.segmented_depth = SegmentedDepth()
+        # Initialize depth and segmentation models
+        self.depth_estimator = DepthEstimator(model_path=depth_model_path)
+        self.object_segmenter = ObjectSegmenter(model_path=sam_model_path)
 
     def __call__(
         self,
@@ -68,12 +78,27 @@ class DepthTo3DLocations:
         Returns:
             Nx4 array of 3D points and semantic labels
         """
-        # Process image through depth and segmentation pipeline
-        modified_depth, mask, rgb_image = self.segmented_depth.process_image(
-            image, input_points, input_labels
+        # Get depth map and RGB image
+        depth_map, rgb_image = self.depth_estimator.estimate_depth(image)
+        
+        # Get segmentation mask
+        if input_points is None or input_labels is None:
+            # Default to center point if no points provided
+            h, w = rgb_image.shape[:2]
+            input_points = [(w/2, h/2)]
+            input_labels = [1]  # 1 indicates foreground
+            
+        mask, _ = self.object_segmenter.segment_image(
+            rgb_image,
+            input_points=input_points,
+            input_labels=input_labels
         )
         
-        # Resize depth and mask to match target resolution
+        # Create modified depth map where background has max depth
+        modified_depth = depth_map.copy()
+        modified_depth[~mask] = self.max_depth
+        
+        # Resize depth and mask to match target resolution if needed
         h, w = modified_depth.shape
         if (h, w) != self.resolution:
             modified_depth = cv2.resize(modified_depth, (self.resolution[1], self.resolution[0]))

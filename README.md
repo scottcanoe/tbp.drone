@@ -108,22 +108,22 @@ The requirements for SAM have already been added to our `environment.yml`, so yo
 
 ## Combined Depth Estimation and Object Segmentation
 
-The project includes a combined depth estimation and object segmentation module in `src/segmented_depth.py`. This module creates depth maps where the background (non-object regions) is set to a maximum depth value.
+The project includes modules for depth estimation and object segmentation in the `src/vision` package. The main interface is the `DepthTo3DLocations` class which combines depth estimation and segmentation to create 3D point clouds.
 
 ### Usage
 
 ```python
-from src.segmented_depth import SegmentedDepth
+from tbp.drone.vision import DepthTo3DLocations
 
 # Initialize the processor (default max_depth is 100.0)
-processor = SegmentedDepth()
+point_cloud_generator = DepthTo3DLocations()
 
 # Process an image with a point prompt
 # You can specify where to segment the object using input points
 center_point = [(image_width/2, image_height/2)]  # Point in center of image
 center_label = [1]  # 1 indicates foreground
 
-modified_depth, mask, rgb_image = processor.process_image(
+points_3d = point_cloud_generator(
     "path/to/image.png",
     input_points=center_point,
     input_labels=center_label
@@ -133,66 +133,36 @@ modified_depth, mask, rgb_image = processor.process_image(
 The module combines both Depth-Anything-V2 and SAM to:
 1. Estimate depth for the entire image
 2. Segment objects of interest
-3. Set the depth of background regions (non-object areas) to a maximum value (default: 100.0)
+3. Convert the depth and segmentation information into a 3D point cloud
+4. Set the depth of background regions (non-object areas) to a maximum value (default: 100.0)
 
 This is particularly useful for drone navigation where you want to focus on the depth of specific objects while treating the background as far away.
 
 Running the example:
 ```bash
 cd ~/tbp/tbp.drone
-PYTHONPATH=/Users/hlee/tbp/tbp.drone python src/segmented_depth.py
+PYTHONPATH=/Users/hlee/tbp/tbp.drone python src/vision/point_cloud.py
 ```
 
-This will process a sample image and save three visualizations:
-- The original RGB image with the point prompt
-- The segmentation mask
-- The modified depth map where background has maximum depth
+This will process a sample image and generate:
+- A visualization of the 3D point cloud saved as `pointcloud.png`
+- The point cloud will include:
+  - 3D spatial representation of the segmented object
+  - Color-coding based on semantic labels
+  - Proper scaling and viewpoint for optimal visualization
 
-## 3D Point Cloud Generation
+## Project Structure
 
-The project includes a module for converting depth images into 3D point clouds with semantic labels in `src/depth_to_3d.py`. This module combines depth estimation and object segmentation to create semantically labeled 3D point clouds.
-
-### Usage
-
-```python
-from src.depth_to_3d import DepthTo3DLocations
-
-# Initialize the processor with camera parameters
-processor = DepthTo3DLocations(
-    resolution=(1080, 1920),  # Height, Width format
-    focal_length_pixels=1825.1,  # Calculated from physical parameters
-    optical_center=(960.0, 540.0),  # cx, cy
-    zoom=1.0,
-    get_all_points=False  # Only return object points, not background
-)
-
-# Process an image with point prompts for segmentation
-image_path = "path/to/image.png"
-input_points = [(960, 540)]  # Center point
-input_labels = [1]  # 1 indicates foreground
-
-# Get 3D point cloud with semantic labels
-points_3d = processor(
-    image_path,
-    input_points=input_points,
-    input_labels=input_labels
-)
+The vision-related code is organized as follows:
+```
+src/
+  vision/
+    __init__.py              # Main package interface
+    point_cloud.py           # Main interface for 3D point cloud generation
+    depth_processing/        # Implementation details
+      __init__.py
+      depth_estimator.py     # Depth estimation using Depth Anything V2
+      object_segmenter.py    # Object segmentation using SAM
 ```
 
-The module provides the following functionality:
-1. Takes an RGB image and transforms it into a 3D point cloud
-2. Each point in the cloud has both spatial coordinates (x, y, z) and a semantic label
-3. Uses the camera intrinsics for DJI Tello camera
-4. Integrates with DepthAnything V2 and SAM for depth estimation and segmentation
-5. Returns an Nx4 numpy array where each point is [x, y, z, semantic_id]
-
-Running the example:
-```bash
-cd ~/tbp/tbp.drone
-PYTHONPATH=/Users/hlee/tbp/tbp.drone python src/depth_to_3d.py
-```
-
-This will process a sample image and generate a visualization of the 3D point cloud saved as `pointcloud.png`. The visualization includes:
-- 3D spatial representation of the segmented object
-- Color-coding based on semantic labels
-- Proper scaling and viewpoint for optimal visualization
+The main interface you'll interact with is `DepthTo3DLocations` from the `vision` package. The depth estimation and segmentation implementations are internal details handled by the `depth_processing` subpackage.
