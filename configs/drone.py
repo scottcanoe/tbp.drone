@@ -18,9 +18,6 @@ from tbp.monty.frameworks.experiments import (
     MontySupervisedObjectPretrainingExperiment,
 )
 from tbp.monty.frameworks.environments import embodied_data as ED
-from tbp.monty.frameworks.environments.habitat_configs import (
-    PatchViewFinderMountHabitatDatasetArgs,
-)
 from tbp.monty.frameworks.config_utils.make_dataset_configs import (
     EnvironmentDataloaderPerObjectArgs,
     ExperimentArgs,
@@ -47,7 +44,6 @@ from tbp.monty.frameworks.config_utils.config_args import (
     get_cube_face_and_corner_views_rotations,
 )
 from tbp.monty.frameworks.models.motor_policies import NaiveScanPolicy
-from tbp.monty.frameworks.environments.two_d_data.py import SaccadeOnImageFromStreamEnvironment
 from tbp.drone.src.environment import DroneEnvironment
 
 # ------------------------------------------------------------------------------
@@ -95,7 +91,7 @@ pretrain_drone_config = dict(
         ),
         # TODO(Team): Probably need to change all the below classes for Drone?
         dataset_class=ED.EnvironmentDataset,
-        dataset_args=PatchViewFinderMountHabitatDatasetArgs(),
+        dataset_args=Drone,
         train_dataloader_class=DroneEnvironment,
         train_dataloader_args=EnvironmentDataloaderPerObjectArgs(
             object_names=get_object_names_by_idx(0, 10, object_list=["potted_meat_can"]),
