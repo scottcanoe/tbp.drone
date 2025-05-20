@@ -10,7 +10,8 @@
             "request": "launch",
             "program": "run.py",
             "console": "integratedTerminal",
-            "args": ["--experiment=pretrain_drone"]
+            "args": ["--experiment=pretrain_drone"],
+            "justMyCode": false
         }
     ]
 }

@@ -44,7 +44,7 @@ from tbp.monty.frameworks.config_utils.config_args import (
     get_cube_face_and_corner_views_rotations,
 )
 from tbp.monty.frameworks.models.motor_policies import NaiveScanPolicy
-from tbp.drone.src.environment import DroneEnvironment
+from tbp.drone.src.dataset_args import DroneDatasetArgs, DroneEnvironmentDataset
 
 # ------------------------------------------------------------------------------
 # Drone
@@ -60,7 +60,7 @@ pretrain_drone_config = dict(
         n_train_epochs=1,
     ),
     logging_config=PretrainLoggingConfig(
-        output_dir=Path("~/tbp.drone/pretraining").expanduser(),
+        output_dir=Path("~/tbp/tbp.drone/pretraining").expanduser(),
     ),
     monty_config=PatchAndViewMontyConfig(
         monty_args=MontyArgs(num_exploratory_steps=500),
@@ -69,7 +69,7 @@ pretrain_drone_config = dict(
                 learning_module_class=DisplacementGraphLM,
                 learning_module_args=dict(
                     k=10,
-                    match_attributes="displacement",
+                    match_attribute="displacement",
                     tolerance=np.ones(3) * 0.0001,
                     graph_delta_thresholds=dict(
                         patch=dict(
@@ -89,16 +89,16 @@ pretrain_drone_config = dict(
                 policy_args=make_naive_scan_policy_config(step_size=5),
             )
         ),
-        # TODO(Team): Probably need to change all the below classes for Drone?
-        dataset_class=ED.EnvironmentDataset,
-        dataset_args=Drone,
-        train_dataloader_class=DroneEnvironment,
-        train_dataloader_args=EnvironmentDataloaderPerObjectArgs(
-            object_names=get_object_names_by_idx(0, 10, object_list=["potted_meat_can"]),
-            object_init_sampler=PredefinedObjectInitializer(rotations=[np.array([0,0,0])]),
-        ),
-    )
+    ),
+    dataset_class=DroneEnvironmentDataset,
+    dataset_args=DroneDatasetArgs(),
+    train_dataloader_class=ED.EnvironmentDataLoaderPerObject,
+    train_dataloader_args=EnvironmentDataloaderPerObjectArgs(
+        object_names=get_object_names_by_idx(0, 10, object_list=["potted_meat_can"]),
+        object_init_sampler=PredefinedObjectInitializer(rotations=[np.array([0,0,0])]),
+    ),
 )
+
 
 CONFIGS = {
     "pretrain_drone": pretrain_drone_config,
