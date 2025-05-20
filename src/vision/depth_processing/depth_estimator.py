@@ -31,10 +31,12 @@ class DepthEstimator:
             'vitb': {'encoder': 'vitb', 'features': 128, 'out_channels': [96, 192, 384, 768]}
         }
         self.encoder = "vitb"
+        self.dataset = "hypersim" # 'hypersim' for indoor model, 'vkitti' for outdoor model
+        # self.max_depth = 20 # 20 for indoor model, 80 for outdoor model
         
         if model_path is None:
+            # model_path = str(Path(f"~/tbp/tbp.drone/models/depth_anything_v2_metric_{self.dataset}_{self.encoder}.pth").expanduser())
             model_path = str(Path("~/tbp/tbp.drone/models/depth_anything_v2_vitb.pth").expanduser())
-        
         self.model = self._initialize_model(model_path)
     
     def _initialize_model(self, model_path: str) -> DepthAnythingV2:
@@ -46,7 +48,7 @@ class DepthEstimator:
         Returns:
             DepthAnythingV2: Initialized model.
         """
-        model = DepthAnythingV2(**self.model_configs[self.encoder])
+        model = DepthAnythingV2(**{**self.model_configs[self.encoder]})
         model.load_state_dict(torch.load(model_path, map_location=self.device))
         return model.to(self.device).eval()
     
@@ -68,7 +70,16 @@ class DepthEstimator:
             rgb_image = image
             
         with torch.no_grad():
-            depth_map = self.model.infer_image(rgb_image)
+            depth_map = self.model.infer_image(rgb_image) # outputs "affine invariant" INVERSE depth map
+            depth_map = 1.0 / depth_map
+            # use interquartile range to keep center 95% of the data
+            q1 = np.percentile(depth_map, 25)
+            q3 = np.percentile(depth_map, 75)
+            depth_map = np.where(depth_map < q1, q1, depth_map)
+            depth_map = np.where(depth_map > q3, q3, depth_map)
+            print(depth_map.min(), depth_map.max())
+            # fill nans with q3
+            depth_map = np.where(np.isnan(depth_map), q3, depth_map)
             
         return depth_map, rgb_image
 
@@ -80,10 +91,12 @@ def main():
     # Process an example image
     image_path = str(Path("~/tbp/tbp.drone/picture.png").expanduser())
     depth_map, rgb_image = depth_estimator.estimate_depth(image_path)
-    print(depth_map.shape)
-    
+    print(depth_map.shape) # (720, 960)
+
     # Visualize and save the depth map
     import matplotlib.pyplot as plt
+    
+
     plt.figure(figsize=(10, 5))
     
     plt.subplot(1, 2, 1)

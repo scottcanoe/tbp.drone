@@ -39,7 +39,7 @@ class DroneDepthTo3DLocations:
         optical_center: Tuple[float, float] = (960.0, 540.0),  # cx, cy
         zoom: float = 1.0,
         get_all_points: bool = False,
-        max_depth: float = 100.0,
+        max_depth: float = 1.0,
         depth_model_path: Optional[str] = None,
         sam_model_path: Optional[str] = None,
     ):
@@ -178,6 +178,9 @@ def main():
     fig = plt.figure(figsize=(12, 12))
     ax = fig.add_subplot(111, projection='3d')
     
+    # Save scatter as npy
+    np.save("./points_3d.npy", points_3d)
+
     # Plot points colored by semantic ID
     scatter = ax.scatter(
         points_3d[:, 0],
@@ -194,10 +197,12 @@ def main():
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
     ax.set_title('3D Point Cloud with Semantic Labels')
-
+    # set zlim to 0 to 1 (max depth)
+    ax.set_zlim(0, 1)
     # Set the viewing angle to see the cup surface better
-    ax.view_init(elev=20, azim=45)  # Adjust elevation and azimuth angles
-    
+    # ax.view_init(elev=20, azim=45)  # Adjust elevation and azimuth angles
+    ax.view_init(elev=-75, azim=-90)
+
     # Set equal scaling for proper proportions
     ax.set_box_aspect([1, 1, 1])
     
