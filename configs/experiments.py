@@ -12,6 +12,7 @@
 from dataclasses import asdict
 
 from configs.names import Experiments
+from configs.drone import pretrain_drone_config
 
 # Add your experiment configurations here
 # e.g.: my_experiment_config = dict(...)
@@ -20,5 +21,6 @@ experiments = Experiments(
     # For each experiment name in Experiments, add its corresponding
     # configuration here.
     # e.g.: my_experiment=my_experiment_config
+    pretrain_drone=pretrain_drone_config,
 )
 CONFIGS = asdict(experiments)

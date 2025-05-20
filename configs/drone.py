@@ -48,6 +48,7 @@ from tbp.monty.frameworks.config_utils.config_args import (
 )
 from tbp.monty.frameworks.models.motor_policies import NaiveScanPolicy
 from tbp.monty.frameworks.environments.two_d_data.py import SaccadeOnImageFromStreamEnvironment
+from tbp.drone.src.environment import DroneEnvironment
 
 # ------------------------------------------------------------------------------
 # Drone
@@ -95,10 +96,14 @@ pretrain_drone_config = dict(
         # TODO(Team): Probably need to change all the below classes for Drone?
         dataset_class=ED.EnvironmentDataset,
         dataset_args=PatchViewFinderMountHabitatDatasetArgs(),
-        train_dataloader_class=SaccadeOnImageFromStreamEnvironment,
+        train_dataloader_class=DroneEnvironment,
         train_dataloader_args=EnvironmentDataloaderPerObjectArgs(
             object_names=get_object_names_by_idx(0, 10, object_list=["potted_meat_can"]),
             object_init_sampler=PredefinedObjectInitializer(rotations=[np.array([0,0,0])]),
         ),
     )
 )
+
+CONFIGS = {
+    "pretrain_drone": pretrain_drone_config,
+}
