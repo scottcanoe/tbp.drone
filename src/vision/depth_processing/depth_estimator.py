@@ -47,7 +47,7 @@ class DepthEstimator:
             DepthAnythingV2: Initialized model.
         """
         model = DepthAnythingV2(**self.model_configs[self.encoder])
-        model.load_state_dict(torch.load(model_path, map_location="cpu"))
+        model.load_state_dict(torch.load(model_path, map_location=self.device))
         return model.to(self.device).eval()
     
     def estimate_depth(self, image: Union[str, npt.NDArray[np.uint8]]) -> Tuple[npt.NDArray[np.float32], npt.NDArray[np.uint8]]:

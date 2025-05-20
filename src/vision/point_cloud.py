@@ -2,8 +2,12 @@ import cv2
 import torch
 import numpy as np
 from pathlib import Path
+import sys
 from typing import Union, Tuple, Optional, List
 import numpy.typing as npt
+
+# Add parent directory to Python path for imports to work with direct execution
+sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
 from .depth_processing.depth_estimator import DepthEstimator
 from .depth_processing.object_segmenter import ObjectSegmenter
@@ -140,7 +144,7 @@ class DroneDepthTo3DLocations:
 def main():
     """Example usage showing visualization of the 3D point cloud."""
     # Initialize processor
-    processor = DepthTo3DLocations()
+    processor = DroneDepthTo3DLocations()
     
     # Process example image with center point prompt
     image_path = str(Path("~/tbp/tbp.drone/picture.png").expanduser())

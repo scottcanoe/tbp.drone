@@ -7,7 +7,7 @@ This module provides high-level functionality for:
 3. Segmenting objects in images
 """
 
-from .point_cloud import DepthTo3DLocations
+from .point_cloud import DroneDepthTo3DLocations as DepthTo3DLocations
 
 __all__ = [
     'DepthTo3DLocations'

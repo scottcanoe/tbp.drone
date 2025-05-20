@@ -66,6 +66,22 @@ conda init
 conda activate drone 
 ```
 
+## Project Structure
+
+The vision-related code is organized as follows:
+```
+src/
+  vision/
+    __init__.py              # Main package interface
+    point_cloud.py           # Main interface for 3D point cloud generation
+    depth_processing/        # Implementation details
+      __init__.py
+      depth_estimator.py     # Depth estimation using Depth Anything V2
+      object_segmenter.py    # Object segmentation using SAM
+```
+
+The main interface you'll interact with is `DepthTo3DLocations` from the `vision` package. The depth estimation and segmentation implementations are internal details handled by the `depth_processing` subpackage.
+
 ## Estimating Depth using Depth-Anything-v2
 
 [Depth-Anythin-v2 Github Repo](https://github.com/DepthAnything/Depth-Anything-V2)
@@ -118,14 +134,20 @@ The project includes modules for depth estimation and object segmentation in the
 # The below script will:
 # - Generate a 3D point cloud with semantic labels
 # - Save visualization as pointcloud.png
+
+# Option 1: Run from parent directory
 cd ~/tbp  # Go to parent directory containing tbp.drone
-PYTHONPATH=$PWD python tbp.drone/src/vision/point_cloud.py
+PYTHONPATH=$PWD python -m tbp.drone.src.vision.point_cloud
+
+# Option 2: Run from tbp.drone directory
+cd ~/tbp/tbp.drone
+PYTHONPATH=~/tbp python -m src.vision.point_cloud
 ```
 
-Or you can write your own python file below and feed in any image. 
+Or you can write your own python file and feed in any image:
 
 ```python
-from tbp.drone.vision import DepthTo3DLocations
+from tbp.drone.src.vision import DepthTo3DLocations
 
 # Initialize the processor (default max_depth is 100.0)
 point_cloud_generator = DepthTo3DLocations()
@@ -150,18 +172,3 @@ The module combines both Depth-Anything-V2 and SAM to:
 
 This is particularly useful for drone navigation where you want to focus on the depth of specific objects while treating the background as far away.
 
-## Project Structure
-
-The vision-related code is organized as follows:
-```
-src/
-  vision/
-    __init__.py              # Main package interface
-    point_cloud.py           # Main interface for 3D point cloud generation
-    depth_processing/        # Implementation details
-      __init__.py
-      depth_estimator.py     # Depth estimation using Depth Anything V2
-      object_segmenter.py    # Object segmentation using SAM
-```
-
-The main interface you'll interact with is `DepthTo3DLocations` from the `vision` package. The depth estimation and segmentation implementations are internal details handled by the `depth_processing` subpackage.
