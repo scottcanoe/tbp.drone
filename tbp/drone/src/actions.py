@@ -2,13 +2,33 @@ from numbers import Number
 
 from tbp.monty.frameworks.actions.actions import Action
 from tbp.monty.frameworks.actions.actuator import Actuator
+from tbp.monty.frameworks.environments.embodied_environment import ActionSpace
+
+__all__ = [
+    "Action",
+    "DroneActionSpace",
+    "TakeOff",
+    "Land",
+    "TurnLeft",
+    "TurnRight",
+    "SetYaw",
+    "MoveForward",
+    "MoveBackward",
+    "MoveLeft",
+    "MoveRight",
+    "MoveUp",
+    "MoveDown",
+]
+
+
+class DroneActionSpace(tuple, ActionSpace):
+    """Action space for 2D data environments."""
+
+    def sample(self):
+        return self.rng.choice(self)
 
 
 class TakeOff(Action):
-    @classmethod
-    def sample(cls, agent_id: str, sampler: "ActionSampler") -> "TakeOff":
-        return sampler.sample_turn_right(agent_id)
-
     def __init__(self, agent_id: str):
         super().__init__(agent_id=agent_id)
 
@@ -17,10 +37,6 @@ class TakeOff(Action):
 
 
 class Land(Action):
-    @classmethod
-    def sample(cls, agent_id: str, sampler: "ActionSampler") -> "Land":
-        return sampler.sample_turn_right(agent_id)
-
     def __init__(self, agent_id: str):
         super().__init__(agent_id=agent_id)
 
@@ -28,11 +44,43 @@ class Land(Action):
         actuator.actuate_land(self)
 
 
-class MoveBackward(Action):
-    @classmethod
-    def sample(cls, agent_id: str, sampler: "ActionSampler") -> "MoveBackward":
-        return sampler.sample_turn_right(agent_id)
+class TurnLeft(Action):
+    def __init__(self, agent_id: str, angle: Number):
+        super().__init__(agent_id=agent_id)
+        self.angle = angle
 
+    def act(self, actuator: Actuator):
+        actuator.actuate_turn_left(self)
+
+
+class TurnRight(Action):
+    def __init__(self, agent_id: str, angle: Number):
+        super().__init__(agent_id=agent_id)
+        self.angle = angle
+
+    def act(self, actuator: Actuator):
+        actuator.actuate_turn_right(self)
+
+
+class SetYaw(Action):
+    def __init__(self, agent_id: str, yaw: Number):
+        super().__init__(agent_id=agent_id)
+        self.yaw = yaw
+
+    def act(self, actuator: Actuator):
+        actuator.actuate_set_yaw(self)
+
+
+class MoveForward(Action):
+    def __init__(self, agent_id: str, distance: Number):
+        super().__init__(agent_id=agent_id)
+        self.distance = distance
+
+    def act(self, actuator: Actuator):
+        actuator.actuate_move_forward(self)
+
+
+class MoveBackward(Action):
     def __init__(self, agent_id: str, distance: Number):
         super().__init__(agent_id=agent_id)
         self.distance = distance
@@ -42,10 +90,6 @@ class MoveBackward(Action):
 
 
 class MoveLeft(Action):
-    @classmethod
-    def sample(cls, agent_id: str, sampler: "ActionSampler") -> "MoveLeft":
-        return sampler.sample_turn_right(agent_id)
-
     def __init__(self, agent_id: str, distance: Number):
         super().__init__(agent_id=agent_id)
         self.distance = distance
@@ -55,10 +99,6 @@ class MoveLeft(Action):
 
 
 class MoveRight(Action):
-    @classmethod
-    def sample(cls, agent_id: str, sampler: "ActionSampler") -> "MoveRight":
-        return sampler.sample_turn_right(agent_id)
-
     def __init__(self, agent_id: str, distance: Number):
         super().__init__(agent_id=agent_id)
         self.distance = distance
@@ -68,10 +108,6 @@ class MoveRight(Action):
 
 
 class MoveUp(Action):
-    @classmethod
-    def sample(cls, agent_id: str, sampler: "ActionSampler") -> "MoveUp":
-        return sampler.sample_turn_right(agent_id)
-
     def __init__(self, agent_id: str, distance: Number):
         super().__init__(agent_id=agent_id)
         self.distance = distance
@@ -81,10 +117,6 @@ class MoveUp(Action):
 
 
 class MoveDown(Action):
-    @classmethod
-    def sample(cls, agent_id: str, sampler: "ActionSampler") -> "MoveDown":
-        return sampler.sample_turn_right(agent_id)
-
     def __init__(self, agent_id: str, distance: Number):
         super().__init__(agent_id=agent_id)
         self.distance = distance
