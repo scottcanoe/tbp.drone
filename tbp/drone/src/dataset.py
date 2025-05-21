@@ -13,10 +13,15 @@ from tbp.monty.frameworks.environments.embodied_data import EnvironmentDataset
 @dataclass
 class DroneEnvInitArgs:
     """Args for DroneEnvironment"""
-    agents: List[DroneAgentConfig] = field(default_factory=lambda: [DroneAgentConfig(agent_type=DroneAgent, agent_args={"agent_id": "agent_id_0", "positions": (0.0, 0.0, 0.0)})])
-    scene_id: int = field(default=1)
-    seed: int = field(default=42)
-    data_path: str = field(default=None)
+
+    agents: List[DroneAgentConfig] = field(
+        default_factory=lambda: [
+            DroneAgentConfig(
+                agent_type=DroneAgent, agent_args={"agent_id": "agent_id_0"}
+            )
+        ]
+    )
+
 
 @dataclass
 class DroneDatasetArgs:
