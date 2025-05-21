@@ -144,6 +144,7 @@ class DroneSim:
         name: str,
         position: Vector3 = (0.0, 0.0, 0.0),
         rotation: Quaternion = (1.0, 0.0, 0.0, 0.0),
+        scale: Vector3 = (1.0, 1.0, 1.0),
         semantic_id: Optional[str] = None,
     ):
         """Add an object to the simulation environment.
@@ -158,6 +159,7 @@ class DroneSim:
             "name": name,
             "position": np.array(position),
             "rotation": np.array(rotation),
+            "scale": np.array(scale),
             "semantic_id": semantic_id,
             "id": self._object_counter,
         }

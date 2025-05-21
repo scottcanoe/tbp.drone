@@ -86,14 +86,17 @@ pretrain_drone_config = dict(
         motor_system_config=MotorSystemConfigNaiveScanSpiral(
             motor_system_args=dict(
                 policy_class=NaiveScanPolicy,
-                policy_args=make_naive_scan_policy_config(step_size=5),
+                policy_args=make_naive_scan_policy_config(step_size=5, agent_id="agent_id_0"),
             )
         ),
     ),
     dataset_class=DroneEnvironmentDataset,
     dataset_args=DroneDatasetArgs(),
-    train_dataloader_class=ED.EnvironmentDataLoader,
-    train_dataloader_args={},
+    train_dataloader_class=ED.EnvironmentDataLoaderPerObject,
+    train_dataloader_args=EnvironmentDataloaderPerObjectArgs(
+        object_names=get_object_names_by_idx(0, 1, object_list=["potted_meat_can"]),
+        object_init_sampler=PredefinedObjectInitializer(rotations=[np.array([0,0,0])]),
+    ),
 )
 
 

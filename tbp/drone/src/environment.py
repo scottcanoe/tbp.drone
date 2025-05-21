@@ -35,9 +35,10 @@ class DroneEnvironment(EmbodiedEnvironment):
         name: str,
         position: Tuple[float, float, float] = (0.0, 0.0, 0.0),
         rotation: Tuple[float, float, float, float] = (1.0, 0.0, 0.0, 0.0),
+        scale: Tuple[float, float, float] = (1.0, 1.0, 1.0),
         semantic_id: Optional[str] = None,
     ):
-        return self.env.add_object(name, position, rotation, semantic_id)
+        return self.env.add_object(name, position, rotation, scale, semantic_id)
 
     def step(self, action) -> Dict[str, Dict]:
         return self.env.apply_action(action)

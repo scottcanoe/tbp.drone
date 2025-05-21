@@ -11,7 +11,7 @@ from tbp.drone.src.dji_tello.simulator import DroneAgentConfig, DroneAgent
 @dataclass
 class DroneEnvInitArgs:
     """Args for DroneEnvironment"""
-    agents: List[DroneAgentConfig] = field(default_factory=lambda: [DroneAgentConfig(agent_type=DroneAgent, agent_args={"agent_id": "drone1", "positions": (0.0, 0.0, 0.0)})])
+    agents: List[DroneAgentConfig] = field(default_factory=lambda: [DroneAgentConfig(agent_type=DroneAgent, agent_args={"agent_id": "agent_id_0", "positions": (0.0, 0.0, 0.0)})])
     scene_id: int = field(default=1)
     seed: int = field(default=42)
     data_path: str = field(default=None)
@@ -42,7 +42,7 @@ class DroneEnvironmentDataset(EnvironmentDataset):
     def reset(self):
         # below is just a copy and paste of the parent class
         observation = self.env.reset() # returns {}
-        state = self.env.get_state() # returns {'drone1': {'position': [...], 'rotation': [...], 'velocity': [...]}}
+        state = self.env.get_state() # returns {'agent_id_0': {'position': [...], 'rotation': [...], 'velocity': [...]}}
         # if self.transform is not None:
         #     observation = self.apply_transform(self.transform, observation, state)
         return observation, state
