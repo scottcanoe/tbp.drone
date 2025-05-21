@@ -1,19 +1,24 @@
 from typing import List, Dict, Optional, Tuple
 from tbp.monty.frameworks.environments.embodied_environment import EmbodiedEnvironment
 from tbp.drone.src.dji_tello.simulator import DroneSim
-from tbp.drone.src.dji_tello.simulator import DroneAgent
+from tbp.drone.src.dji_tello.simulator import DroneAgentConfig
+
 class DroneEnvironment(EmbodiedEnvironment):
     def __init__(
         self,
-        agent: DroneAgent,
+        agents: List[DroneAgentConfig],
         scene_id: Optional[str] = None,
         seed: int = 42,
         data_path: Optional[str] = None,
     ):
         super().__init__()
         self.agents = []
-        self.agents.append(agent)
-
+        for config in agents:
+            agent_type = config["agent_type"]
+            agent_args = config["agent_args"]
+            agent = agent_type(**agent_args)
+            self.agents.append(agent)
+            
         self.env = DroneSim(
             agents=self.agents,
             scene_id=scene_id,

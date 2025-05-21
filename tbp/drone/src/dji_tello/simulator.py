@@ -1,18 +1,21 @@
 import numpy as np
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Type, Union
 from djitellopy import Tello
+from dataclasses import dataclass
 
 Vector3 = Tuple[float, float, float]
 Quaternion = Tuple[float, float, float, float]
 
+
+
 class DroneAgent:
     """Base class for drone agents in simulation."""
-    def __init__(self, agent_id: str):
+    def __init__(self, agent_id: str, positions: Vector3 = (0.0, 0.0, 0.0), rotation: Quaternion = (1.0, 0.0, 0.0, 0.0), velocity: Vector3 = (0.0, 0.0, 0.0)):
         self.agent_id = agent_id
-        self._position = np.array([0.0, 0.0, 0.0])  # x, y, z in meters
-        self._rotation = np.array([1.0, 0.0, 0.0, 0.0])  # quaternion
-        self._velocity = np.array([0.0, 0.0, 0.0])  # velocity in m/s
+        self._position = np.array(positions)  # x, y, z in meters
+        self._rotation = np.array(rotation)  # quaternion
+        self._velocity = np.array(velocity)  # velocity in m/s
 
     def initialize(self, sim):
         """Initialize agent with simulator instance."""
@@ -46,6 +49,12 @@ class DroneAgent:
     def velocity(self, value):
         self._velocity = np.array(value)
 
+@dataclass
+class DroneAgentConfig:
+    """Agent configuration used by :class:`HabitatEnvironment`."""
+
+    agent_type: List[DroneAgent]
+    agent_args: Dict
 class DroneSim:
     """DJI Tello drone simulator interface.
     
@@ -93,6 +102,8 @@ class DroneSim:
             "flip_left",
             "flip_right",
             "stop",
+            "send_xyz_speed",
+            "set_yaw",
         }
         
         # Initialize agent tracking
@@ -223,10 +234,6 @@ class DroneSim:
         # Get Tello state
         state = {
             "battery": self._tello.get_battery(),
-            "temperature": self._tello.get_temperature(),
-            "flight_time": self._tello.get_flight_time(),
-            "height": self._tello.get_height(),
-            "barometer": self._tello.get_barometer(),
         }
         
         # Get camera frame if available
@@ -243,7 +250,7 @@ class DroneSim:
             
         return observations
 
-    def get_states(self) -> Dict[str, Dict]:
+    def get_state(self) -> Dict[str, Dict]:
         """Get agent and sensor states.
         
         Returns:

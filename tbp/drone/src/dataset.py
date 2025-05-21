@@ -6,12 +6,12 @@ from typing import Callable, Dict, List
 from tbp.drone.src.environment import DroneEnvironment  
 from tbp.drone.src.vision import DroneDepthTo3DLocations
 from tbp.monty.frameworks.environments.embodied_data import EnvironmentDataset
-from tbp.drone.src.dji_tello.simulator import DroneAgent
+from tbp.drone.src.dji_tello.simulator import DroneAgentConfig, DroneAgent
 
 @dataclass
 class DroneEnvInitArgs:
     """Args for DroneEnvironment"""
-    agent: DroneAgent = field(default_factory=lambda: DroneAgent(agent_id="drone1"))
+    agents: List[DroneAgentConfig] = field(default_factory=lambda: [DroneAgentConfig(agent_type=DroneAgent, agent_args={"agent_id": "drone1", "positions": (0.0, 0.0, 0.0)})])
     scene_id: int = field(default=1)
     seed: int = field(default=42)
     data_path: str = field(default=None)
@@ -41,8 +41,8 @@ class DroneEnvironmentDataset(EnvironmentDataset):
 
     def reset(self):
         # below is just a copy and paste of the parent class
-        observation = self.env.reset()
-        state = self.env.get_state()
+        observation = self.env.reset() # returns {}
+        state = self.env.get_state() # returns {'drone1': {'position': [...], 'rotation': [...], 'velocity': [...]}}
         # if self.transform is not None:
         #     observation = self.apply_transform(self.transform, observation, state)
         return observation, state

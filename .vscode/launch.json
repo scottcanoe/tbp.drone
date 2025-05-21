@@ -11,7 +11,8 @@
             "program": "run.py",
             "console": "integratedTerminal",
             "args": ["--experiment=pretrain_drone"],
-            "justMyCode": false
+            "justMyCode": false,
+            "stopOnEntry": true,
         }
     ]
 }

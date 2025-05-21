@@ -44,7 +44,7 @@ from tbp.monty.frameworks.config_utils.config_args import (
     get_cube_face_and_corner_views_rotations,
 )
 from tbp.monty.frameworks.models.motor_policies import NaiveScanPolicy
-from tbp.drone.src.dataset_args import DroneDatasetArgs, DroneEnvironmentDataset
+from tbp.drone.src.dataset import DroneDatasetArgs, DroneEnvironmentDataset
 
 # ------------------------------------------------------------------------------
 # Drone
@@ -92,11 +92,8 @@ pretrain_drone_config = dict(
     ),
     dataset_class=DroneEnvironmentDataset,
     dataset_args=DroneDatasetArgs(),
-    train_dataloader_class=ED.EnvironmentDataLoaderPerObject,
-    train_dataloader_args=EnvironmentDataloaderPerObjectArgs(
-        object_names=get_object_names_by_idx(0, 10, object_list=["potted_meat_can"]),
-        object_init_sampler=PredefinedObjectInitializer(rotations=[np.array([0,0,0])]),
-    ),
+    train_dataloader_class=ED.EnvironmentDataLoader,
+    train_dataloader_args={},
 )
 
 
