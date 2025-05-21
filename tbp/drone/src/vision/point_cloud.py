@@ -34,9 +34,9 @@ class DroneDepthTo3DLocations:
     
     def __init__(
         self,
-        resolution: Tuple[int, int] = (1080, 1920),  # Height, Width format
-        focal_length_pixels: float = 1825.1,  # Calculated from physical parameters
-        optical_center: Tuple[float, float] = (960.0, 540.0),  # cx, cy
+        resolution: Tuple[int, int] = (720, 960),  # Height, Width format for Tello
+        focal_length_pixels: float = 920.0,  # Average of fx and fy from calibration
+        optical_center: Tuple[float, float] = (459.904354, 351.238301),  # cx, cy from calibration
         zoom: float = 1.0,
         get_all_points: bool = False,
         max_depth: float = 1.0,
@@ -46,9 +46,9 @@ class DroneDepthTo3DLocations:
         """Initialize the 3D point cloud generator.
         
         Args:
-            resolution: Image resolution as (height, width)
-            focal_length_pixels: Focal length in pixels (calculated from physical parameters)
-            optical_center: Optical center in pixels (cx, cy)
+            resolution: Image resolution as (height, width) for Tello camera (720p)
+            focal_length_pixels: Focal length in pixels (average of calibrated fx and fy)
+            optical_center: Optical center in pixels (cx, cy) from calibration
             zoom: Camera zoom factor
             get_all_points: If True, return all points including background
             max_depth: Maximum depth value for background points
