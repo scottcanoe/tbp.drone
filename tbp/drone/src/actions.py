@@ -11,6 +11,7 @@ __all__ = [
     "Land",
     "TurnLeft",
     "TurnRight",
+    "SetHeight",
     "SetYaw",
     "MoveForward",
     "MoveBackward",
@@ -63,9 +64,9 @@ class TurnRight(Action):
 
 
 class SetYaw(Action):
-    def __init__(self, agent_id: str, yaw: Number):
+    def __init__(self, agent_id: str, angle: Number):
         super().__init__(agent_id=agent_id)
-        self.yaw = yaw
+        self.angle = angle
 
     def act(self, actuator: Actuator):
         actuator.actuate_set_yaw(self)
@@ -123,3 +124,11 @@ class MoveDown(Action):
 
     def act(self, actuator: Actuator):
         actuator.actuate_move_down(self)
+
+class SetHeight(Action):
+    def __init__(self, agent_id: str, height: Number):
+        super().__init__(agent_id=agent_id)
+        self.height = height
+
+    def act(self, actuator: Actuator):
+        actuator.actuate_set_height(self)
