@@ -28,6 +28,7 @@ from tbp.drone.src.actions import (
     TurnLeft,
     TurnRight,
 )
+from tbp.drone.src.drone_pilot import DronePilot
 from tbp.monty.frameworks.environments.embodied_environment import EmbodiedEnvironment
 from tbp.monty.frameworks.models.motor_system_state import (
     AgentState,
@@ -39,7 +40,7 @@ DATA_DIR = Path("~/tbp/results/drone").expanduser()
 MINIMUM_DISTANCE = 0.2  # Minimal traversible distance by drone in meters.
 
 
-class Pilot:
+class TelloPilot:
     def __init__(self):
         self._tello = Tello()
         self._tello.connect(wait_for_state=True)
@@ -95,12 +96,12 @@ class DroneEnvironment(EmbodiedEnvironment):
     Gets created by DroneEnvironmentDataset.
     """
 
-    def __init__(self, agent_id: str):
+    def __init__(self, agent_id: str = "agent_id_0"):
         super().__init__()
 
         self._agent_id = agent_id
 
-        self._pilot = Pilot()
+        self._pilot = DronePilot()
         self._position = np.zeros(3)
         self._rotation = quaternion.quaternion(1, 0, 0, 0)
         self._step_counter = 0
@@ -323,6 +324,10 @@ class DroneEnvironment(EmbodiedEnvironment):
         obs = self.apply_action(action)
         self._step_counter += 1
         return obs
+
+    def reset(self):
+        return {}
+        # self._pilot.reset()
 
     def close(self):
         """Close simulator and release resources."""
