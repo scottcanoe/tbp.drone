@@ -77,10 +77,10 @@ class DronePilot(Process):
         return self.call(MoveDown(distance))
 
     def rotate_left(self, degrees):
-        return self.call(RotateLeft(degrees))
+        return self.call(RotateLeft(round(degrees)))
 
     def rotate_right(self, degrees):
-        return self.call(RotateRight(degrees))
+        return self.call(RotateRight(round(degrees)))
 
     def take_photo(self):
         return self.call(TakePhoto())
