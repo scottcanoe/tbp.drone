@@ -44,6 +44,13 @@ conda activate drone
 conda config --env --set subdir osx-64
 ```
 
+### Important Note for Apple Silicon Users
+Before running any depth estimation tasks, set the following environment variable:
+```bash
+export PYTORCH_ENABLE_MPS_FALLBACK=1
+```
+This is required because some operations in the Depth Anything model are not yet supported in MPS (Metal Performance Shaders) and need to fall back to CPU. Without this setting, you may encounter runtime errors.
+
 ### ARM64 (Apple Silicon) (bash shell)
 ```
 conda env create -f environment.yml --subdir=osx-64
