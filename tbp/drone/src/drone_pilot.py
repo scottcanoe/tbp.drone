@@ -118,15 +118,19 @@ class DronePilot(Process):
                 log.info(f"Got action: {action.__class__.__name__}")
                 response = action.act(self, self._tello)
                 self._response_in.send(response)
+
+                self._last_keepalive = datetime.now()
                 time.sleep(self._tello.TIME_BTW_COMMANDS)
             except queue.Empty:
-                # no command, so send a query to keep the drone from landing
-                now = datetime.now()
-                if now - self._last_keepalive >= timedelta(seconds=10):
-                    self._tello.query_battery()
-                    self._last_keepalive = now
+                pass
             except TelloException as e:
                 log.error(f"Exception: {e}")
+
+            # Send a query in case we haven't processed a message during this loop
+            now = datetime.now()
+            if now - self._last_keepalive >= timedelta(seconds=10):
+                self._tello.send_read_command("battery?")
+                self._last_keepalive = now
 
 
 class DroneCommand(Protocol):
