@@ -4,7 +4,7 @@ import logging
 import queue
 import time
 from datetime import datetime, timedelta
-from multiprocessing import Process, Pipe, Queue
+from multiprocessing import Pipe, Process, Queue
 from typing import Protocol
 
 from djitellopy import Tello, TelloException
@@ -46,35 +46,41 @@ class DronePilot(Process):
     def land(self):
         return self.call(Land())
 
+    def get_battery(self):
+        return self.call(GetBattery())
+
+    def get_height(self):
+        return self.call(GetHeight()) / 100
+
     def move_left(self, distance_m=0.20):
-        distance = int(distance_m * 100)
+        distance = round(distance_m * 100)
         return self.call(MoveLeft(distance))
 
     def move_right(self, distance_m=0.20):
-        distance = int(distance_m * 100)
+        distance = round(distance_m * 100)
         return self.call(MoveRight(distance))
 
     def move_forward(self, distance_m = 0.20):
-        distance = int(distance_m * 100)
+        distance = round(distance_m * 100)
         return self.call(MoveForward(distance))
 
     def move_backward(self, distance_m = 0.20):
-        distance = int(distance_m * 100)
+        distance = round(distance_m * 100)
         return self.call(MoveBackward(distance))
 
     def move_up(self, distance_m = 0.20):
-        distance = int(distance_m * 100)
+        distance = round(distance_m * 100)
         return self.call(MoveUp(distance))
 
     def move_down(self, distance_m = 0.20):
-        distance = int(distance_m * 100)
+        distance = round(distance_m * 100)
         return self.call(MoveDown(distance))
 
     def rotate_left(self, degrees):
-        return self.call(RotateLeft(degrees))
+        return self.call(RotateLeft(round(degrees)))
 
     def rotate_right(self, degrees):
-        return self.call(RotateRight(degrees))
+        return self.call(RotateRight(round(degrees)))
 
     def take_photo(self):
         return self.call(TakePhoto())
@@ -135,6 +141,15 @@ class TakeOff(DroneCommand):
 class Land(DroneCommand):
     def act(self, _pilot, tello):
         tello.land()
+
+class GetBattery(DroneCommand):
+    def act(self, _pilot, tello):
+        return tello.get_battery()
+
+
+class GetHeight(DroneCommand):
+    def act(self, _pilot, tello):
+        return tello.get_height()
 
 
 class MoveBase(DroneCommand):
