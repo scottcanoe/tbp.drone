@@ -2,6 +2,9 @@
 models/
 imgs/
 
+# Feel free to add code to play around
+sandbox/ 
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
