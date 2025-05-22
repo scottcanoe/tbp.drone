@@ -330,30 +330,6 @@ class DroneEnvironment(EmbodiedEnvironment):
         # TODO The NotImplementedError highlights an issue with the EmbodiedEnvironment
         #      interface and how the class hierarchy is defined and used.
         raise NotImplementedError(
-            "SaccadeOnImageEnvironment does not support removing all objects"
+            "DroneEnvironment does not support removing all objects"
         )
 
-
-class DroneLogger:
-    def __init__(self, out_dir: Optional[os.PathLike] = None):
-        if out_dir is None:
-            now = datetime.datetime.now()
-            out_dir = now.strftime("%Y-%m-%d_%H:%M")
-        self.out_dir = DATA_DIR / out_dir
-        if self.out_dir.exists():
-            self.out_dir.rename(self.out_dir.with_suffix(".old"))
-        self.out_dir.mkdir(parents=True)
-        self._step_counter = -1
-
-    def get_cwd(self, require: bool = True) -> Path:
-        path = self.out_dir / self.step
-        if require:
-            path.mkdir(parents=True)
-        return path
-
-    def step(self):
-        self._step_counter += 1
-
-    def log(self, message: str):
-        self.log_file.write(message + "\n")
-        self.log_file.flush()
