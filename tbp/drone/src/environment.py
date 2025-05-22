@@ -272,7 +272,8 @@ class DroneEnvironment(EmbodiedEnvironment):
 
     def reset(self):
         self._pilot.start()
-        return {}
+        self._pilot.takeoff()
+        return self.get_observations()
 
     def close(self):
         """Close simulator and release resources."""

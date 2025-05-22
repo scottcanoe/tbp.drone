@@ -52,6 +52,9 @@ class DronePilot(Process):
     def get_height(self):
         return self.call(GetHeight()) / 100
 
+    def get_yaw(self):
+        return self.call(GetYaw())
+
     def move_left(self, distance_m=0.20):
         distance = round(distance_m * 100)
         return self.call(MoveLeft(distance))
@@ -154,6 +157,10 @@ class GetBattery(DroneCommand):
 class GetHeight(DroneCommand):
     def act(self, _pilot, tello):
         return tello.get_height()
+
+class GetYaw(DroneCommand):
+    def act(self, _pilot, tello):
+        return tello.get_yaw()
 
 
 class MoveBase(DroneCommand):
