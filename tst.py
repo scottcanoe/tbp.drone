@@ -17,16 +17,21 @@ import quaternion
 from djitellopy import Tello
 from scipy.spatial.transform import Rotation
 
+from tbp.drone.src.drone_pilot import DronePilot
 from tbp.drone.src.environment import DroneEnvironment
 
-# from tbp.monty.frameworks.actions.actions import (
-#     Action,
-#     MoveForward,
-#     SetYaw,
-#     TurnLeft,
-#     TurnRight,
-# )
+camera = {"height": 720, "width": 960}
 
-env = DroneEnvironment()
+
+def snap():
+    image = env._pilot.take_photo()
+    plt.imshow(image)
+    return image
+
+
+# env = DroneEnvironment("agen")
+pilot = DronePilot()
+
+# pilot.start()
 
 # env.reset()
