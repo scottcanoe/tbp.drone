@@ -179,3 +179,148 @@ The module combines both Depth-Anything-V2 and SAM to:
 
 This is particularly useful for drone navigation where you want to focus on the depth of specific objects while treating the background as far away.
 
+## Using ArUco Detection and Point Cloud Generation
+
+### ArUco Marker Detection
+
+The `ArucoDetector` class can be used to detect ArUco markers in images and estimate camera pose. Here's how to use it:
+
+```python
+from tbp.drone.src.vision.landmark_detection.aruco_detection import ArucoDetector
+
+# Initialize detector (marker_size is the physical size of your ArUco marker in meters)
+detector = ArucoDetector(marker_size=0.05)  # 5cm marker
+
+# Load and process your image
+image = cv2.imread("path/to/your/image.png")
+corners, ids, rejected = detector.detect(image, output_dir=".")
+
+# Draw markers and pose information on the image
+if ids is not None and len(ids) > 0:
+    # Draw detected markers and pose axes
+    image = detector.draw_markers_with_pose(image, corners, ids)
+    
+    # Optional: Draw rejected markers
+    image = detector.draw_rejected_markers(image, rejected)
+    
+    # Save the result
+    cv2.imwrite("result.png", image)
+```
+
+### 3D Point Cloud Generation
+
+The `DroneDepthTo3DLocations` class combines depth estimation and object segmentation to create 3D point clouds from images. Here's how to use it:
+
+```python
+from tbp.drone.src.vision.point_cloud import DroneDepthTo3DLocations
+import cv2
+import numpy as np
+
+# Initialize the processor
+processor = DroneDepthTo3DLocations(
+    resolution=(720, 960),  # Height, Width format
+    max_depth=1.0,  # Maximum depth in meters
+    get_all_points=False  # True to include background points
+)
+
+# Load your image to get dimensions
+image_path = "path/to/your/image.png"
+image = cv2.imread(image_path)
+h, w = image.shape[:2]
+
+# Create point prompts for object segmentation
+# These points help identify the object of interest
+input_points = np.array([
+    [w/2, h/2],      # Center
+    [w/2, h/2-50],   # Top
+    [w/2, h/2+50],   # Bottom
+    [w/2-50, h/2],   # Left
+    [w/2+50, h/2]    # Right
+])
+input_labels = np.array([1, 1, 1, 1, 1])  # All points are foreground
+
+# Generate 3D point cloud
+points_3d = processor(
+    image_path,
+    input_points=input_points.tolist(),
+    input_labels=input_labels.tolist()
+)
+
+# points_3d shape is (N, 6) where each point is [x, y, z, r, g, b]
+# Save the point cloud
+np.save("points_3d.npy", points_3d)
+
+# Optional: Save depth map and segmentation mask
+depth_map, rgb_image = processor.depth_estimator.estimate_depth(image_path)
+mask, _ = processor.object_segmenter.segment_image(
+    rgb_image,
+    input_points=input_points.tolist(),
+    input_labels=input_labels.tolist()
+)
+
+# Save depth map
+np.save("depthmap.npy", depth_map)
+depth_norm = (255 * (depth_map - depth_map.min()) / (depth_map.ptp() + 1e-8)).astype(np.uint8)
+cv2.imwrite("depthmap.png", depth_norm)
+
+# Save segmentation mask
+np.save("mask.npy", mask)
+mask_img = (mask * 255).astype(np.uint8)
+cv2.imwrite("mask.png", mask_img)
+```
+
+### Visualizing Results
+
+The point cloud can be visualized using either Plotly (interactive) or Open3D:
+
+```python
+# Using Open3D
+from tbp.drone.src.vision.point_cloud import visualize_point_cloud_with_camera
+
+# Visualize point cloud (optionally with camera pose if ArUco markers were detected)
+visualize_point_cloud_with_camera(points_3d, camera_position=None, camera_rotation=None)
+
+# If you have Plotly installed, you can also create an interactive HTML visualization:
+import plotly.graph_objs as go
+import plotly.io as pio
+
+x, y, z = points_3d[:, 0], points_3d[:, 1], -points_3d[:, 2]
+point_colors = [f'rgb({int(r*255)},{int(g*255)},{int(b*255)})' 
+                for r,g,b in points_3d[:, 3:6]]
+
+fig = go.Figure(data=[
+    go.Scatter3d(
+        x=x, y=y, z=z,
+        mode='markers',
+        marker=dict(
+            size=2,
+            color=point_colors,
+            opacity=0.6
+        )
+    )
+])
+pio.write_html(fig, file="pointcloud_3d.html")
+```
+
+### Important Notes
+
+1. For ArUco detection:
+   - The marker size must match the physical size of your printed ArUco markers
+   - The camera must be calibrated (camera matrix and distortion coefficients)
+   - Good lighting and marker visibility are essential for accurate detection
+
+2. For point cloud generation:
+   - The input image should be well-lit and in focus
+   - The object of interest should be clearly visible
+   - Point prompts help identify the object for segmentation
+   - The depth estimation works best for indoor scenes within a few meters
+
+3. System requirements:
+   - Make sure you have all required models downloaded:
+     - SAM ViT-B model (`sam_vit_b_01ec64.pth`)
+     - Depth-Anything-V2-Base model (`depth_anything_v2_vitb.pth`)
+   - For Apple Silicon users, remember to set:
+     ```bash
+     export PYTORCH_ENABLE_MPS_FALLBACK=1
+     ```
+

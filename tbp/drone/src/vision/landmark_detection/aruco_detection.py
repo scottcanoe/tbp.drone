@@ -10,11 +10,19 @@ import scipy.spatial.transform
 CUBE_LENGTH = 2.25 * 0.0254  # meters
 HALF = CUBE_LENGTH / 2
 MARKER_WORLD_POSITIONS = {
-    3: np.array([0.0, 0.0, -HALF]),  # Marker 3 at +Z
-    4: np.array([-HALF, 0.0, 0.0]),  # Marker 4 at +X
-    1: np.array([0.0, 0.0, +HALF]),  # Marker 1 at -Z
-    2: np.array([+HALF, 0.0, 0.0]),  # Marker 2 at -X
+    3: np.array([0.0, 0.0, -HALF]),  # Marker 3 at -Z
+    4: np.array([-HALF, 0.0, 0.0]),  # Marker 4 at -X
+    1: np.array([0.0, 0.0, +HALF]),  # Marker 1 at +Z
+    2: np.array([+HALF, 0.0, 0.0]),  # Marker 2 at +X
 }
+MARKER_WORLD_ORIENTATIONS = {
+    3: np.array([0.0, np.pi, 0.0]),      # Marker 3 at -Z (rotated 180° around Y)
+    4: np.array([0.0, -np.pi/2, 0.0]),   # Marker 4 at -X (rotated -90° around Y)
+    1: np.array([0.0, np.pi, 0.0]),        # Marker 1 at +Z (no rotation needed)
+    2: np.array([0.0, np.pi/2, 0.0]),    # Marker 2 at +X (rotated 90° around Y)
+}
+
+
 
 class ArucoDetector:
     def __init__(self, marker_size=0.05):
@@ -100,18 +108,28 @@ class ArucoDetector:
         # Convert rotation vector to matrix
         R_marker_to_cam, _ = cv2.Rodrigues(rvec)
         
-        # If marker world orientation is provided, use it
-        if marker_world_orientation is not None:
-            R_world_to_marker, _ = cv2.Rodrigues(np.array(marker_world_orientation))
-        else:
-            # Assume marker is aligned with world coordinates
-            R_world_to_marker = np.eye(3)
+        # Get marker world orientation from dictionary if not provided
+        if marker_world_orientation is None:
+            marker_id = None
+            # Find the marker ID by comparing world positions
+            for id, pos in MARKER_WORLD_POSITIONS.items():
+                if np.allclose(pos, marker_world_position):
+                    marker_id = id
+                    break
+            if marker_id is not None and marker_id in MARKER_WORLD_ORIENTATIONS:
+                marker_world_orientation = MARKER_WORLD_ORIENTATIONS[marker_id]
+            else:
+                # Default to no rotation if marker ID not found
+                marker_world_orientation = np.array([0.0, 0.0, 0.0])
+        
+        # Convert marker world orientation to rotation matrix
+        R_world_to_marker, _ = cv2.Rodrigues(np.array(marker_world_orientation))
         
         # Calculate camera rotation in world coordinates
-        R_cam_to_world = R_world_to_marker.T @ R_marker_to_cam.T
+        # R_cam_to_world = R_world_to_marker.T @ R_marker_to_cam.T
+        R_cam_to_world = R_marker_to_cam.T @ R_world_to_marker
         
         # Calculate camera position in world coordinates
-        # p_world = p_marker_world - R_world_to_cam.T @ t_cam_to_marker
         camera_position = np.array(marker_world_position) - R_cam_to_world @ tvec.reshape(3)
         
         return camera_position, R_cam_to_world
@@ -140,16 +158,31 @@ class ArucoDetector:
         text_x = 30
         text_y = 30
         font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.7
-        font_thickness = 2
+        font_scale = 0.7  # Restored to original size
+        font_thickness = 2  # Restored to original thickness
         
         camera_positions = []
         camera_rotations = []
         marker3_found = False
         marker3_index = None
         
-        # Estimate pose for each marker
+        # Calculate total height needed per marker
+        line_height = 30
+        marker_info_height = line_height * 11  # 11 lines of text per marker
+        
+        # Estimate total height needed
+        total_height_needed = len(corners) * marker_info_height
+        
+        # If total height would exceed image height, adjust starting position
+        if total_height_needed > image.shape[0]:
+            text_y = max(30, image.shape[0] - total_height_needed)
+            
+        # Process each marker
         for i, corner in enumerate(corners):
+            marker_id = ids[i][0]
+            marker_world_pos = MARKER_WORLD_POSITIONS.get(marker_id, np.array([0.0, 0.0, 0.0]))
+            marker_world_orient = MARKER_WORLD_ORIENTATIONS.get(marker_id, np.array([0.0, 0.0, 0.0]))
+            
             # Get rotation and translation vectors
             objPoints = np.array([
                 [-self.marker_size/2, self.marker_size/2, 0],
@@ -171,95 +204,130 @@ class ArucoDetector:
             )
             
             if success:
-                # Draw axis for each marker
-                cv2.drawFrameAxes(
-                    image,
-                    self.camera_matrix,
-                    self.dist_coeffs,
-                    rvec,
-                    tvec,
-                    self.marker_size * 0.5  # Length of the axes
-                )
-                
-                # Use correct world position for each marker
-                marker_id = ids[i][0]
-                marker_world_pos = MARKER_WORLD_POSITIONS.get(marker_id, np.array([0.0, 0.0, 0.0]))
                 if marker_id == 3:
                     marker3_found = True
                     marker3_index = i
                     print(f"World coordinate of marker 3 center: {MARKER_WORLD_POSITIONS[3]}")
-                camera_pos, camera_rot = self.get_camera_pose(corner, marker_world_pos)
+                    print(f"World orientation of marker 3: {MARKER_WORLD_ORIENTATIONS[3]}")
+                
+                camera_pos, camera_rot = self.get_camera_pose(corner, marker_world_pos, marker_world_orient)
                 if camera_pos is not None and camera_rot is not None:
                     camera_positions.append(camera_pos)
                     camera_rotations.append(camera_rot)
                 
+                # Calculate starting y position for this marker's text block
+                current_text_y = int(text_y + i * marker_info_height)
+                
                 # Draw camera position and rotation on image
                 cv2.putText(image, f"Marker ID: {marker_id}", 
-                          (text_x, text_y), font, font_scale, (0, 255, 0), font_thickness)
-                text_y += 30
+                          (text_x, current_text_y), font, font_scale, (0, 255, 0), font_thickness)
+                current_text_y += line_height
                 
                 cv2.putText(image, f"Camera Position (m):", 
-                          (text_x, text_y), font, font_scale, (0, 255, 0), font_thickness)
-                text_y += 30
+                          (text_x, current_text_y), font, font_scale, (0, 255, 0), font_thickness)
+                current_text_y += line_height
                 
                 cv2.putText(image, f"X: {camera_pos[0]:.3f}", 
-                          (text_x, text_y), font, font_scale, (0, 255, 0), font_thickness)
-                text_y += 30
+                          (text_x, current_text_y), font, font_scale, (0, 255, 0), font_thickness)
+                current_text_y += line_height
                 
                 cv2.putText(image, f"Y: {camera_pos[1]:.3f}", 
-                          (text_x, text_y), font, font_scale, (0, 255, 0), font_thickness)
-                text_y += 30
+                          (text_x, current_text_y), font, font_scale, (0, 255, 0), font_thickness)
+                current_text_y += line_height
                 
                 cv2.putText(image, f"Z: {camera_pos[2]:.3f}", 
-                          (text_x, text_y), font, font_scale, (0, 255, 0), font_thickness)
-                text_y += 45
+                          (text_x, current_text_y), font, font_scale, (0, 255, 0), font_thickness)
+                current_text_y += int(line_height * 1.5)  # Extra spacing before rotation
                  
                 cv2.putText(image, f"Camera Rotation (deg):", 
-                          (text_x, text_y), font, font_scale, (0, 255, 0), font_thickness)
-                text_y += 30
+                          (text_x, current_text_y), font, font_scale, (0, 255, 0), font_thickness)
+                current_text_y += line_height
                 
-                euler_angles = np.degrees(cv2.RQDecomp3x3(camera_rot)[0])
-                euler_angles = euler_angles % 360  # Wrap to [0, 360)
+                euler_angles = scipy.spatial.transform.Rotation.from_matrix(camera_rot).as_euler('xyz', degrees=True)
                 cv2.putText(image, f"Roll: {euler_angles[0]:.1f}", 
-                          (text_x, text_y), font, font_scale, (0, 255, 0), font_thickness)
-                text_y += 30
+                          (text_x, current_text_y), font, font_scale, (0, 255, 0), font_thickness)
+                current_text_y += line_height
                 
                 cv2.putText(image, f"Pitch: {euler_angles[1]:.1f}", 
-                          (text_x, text_y), font, font_scale, (0, 255, 0), font_thickness)
-                text_y += 30
+                          (text_x, current_text_y), font, font_scale, (0, 255, 0), font_thickness)
+                current_text_y += line_height
                 
                 cv2.putText(image, f"Yaw: {euler_angles[2]:.1f}", 
-                          (text_x, text_y), font, font_scale, (0, 255, 0), font_thickness)
+                          (text_x, current_text_y), font, font_scale, (0, 255, 0), font_thickness)
         
-        # --- Aggregate pose using marker 3 as origin if present ---
+        # Calculate and draw aggregated pose
         if camera_positions and camera_rotations:
             camera_positions = np.array(camera_positions)
             camera_rotations = np.array(camera_rotations)
+            
             if marker3_found:
-                # Use only marker 3 for pose
                 idx = marker3_index
                 agg_pos = camera_positions[idx]
                 agg_rot = camera_rotations[idx]
             else:
-                # Aggregate all
                 agg_pos, agg_rot = self.aggregate_camera_poses(camera_positions, camera_rotations)
-            # Annotate aggregated pose
-            text_y += 30
-            cv2.putText(image, f"Aggregated Camera Pose (using marker 3 if present):", (text_x, text_y), font, font_scale, (255, 0, 0), font_thickness)
-            text_y += 30
-            cv2.putText(image, f"X: {agg_pos[0]:.3f}", (text_x, text_y), font, font_scale, (255, 0, 0), font_thickness)
-            text_y += 30
-            cv2.putText(image, f"Y: {agg_pos[1]:.3f}", (text_x, text_y), font, font_scale, (255, 0, 0), font_thickness)
-            text_y += 30
-            cv2.putText(image, f"Z: {agg_pos[2]:.3f}", (text_x, text_y), font, font_scale, (255, 0, 0), font_thickness)
-            text_y += 30
-            agg_euler = np.degrees(cv2.RQDecomp3x3(agg_rot)[0])
-            agg_euler = agg_euler % 360  # Wrap to [0, 360)
-            cv2.putText(image, f"Roll: {agg_euler[0]:.1f}", (text_x, text_y), font, font_scale, (255, 0, 0), font_thickness)
-            text_y += 30
-            cv2.putText(image, f"Pitch: {agg_euler[1]:.1f}", (text_x, text_y), font, font_scale, (255, 0, 0), font_thickness)
-            text_y += 30
-            cv2.putText(image, f"Yaw: {agg_euler[2]:.1f}", (text_x, text_y), font, font_scale, (255, 0, 0), font_thickness)
+            
+            # Convert aggregated rotation matrix to rotation vector
+            agg_rvec, _ = cv2.Rodrigues(agg_rot)
+            
+            # Convert aggregated position to translation vector (negative because we want camera-to-world)
+            agg_tvec = -agg_rot.T @ agg_pos
+            
+            # Draw aggregated pose axis
+            cv2.drawFrameAxes(
+                image,
+                self.camera_matrix,
+                self.dist_coeffs,
+                agg_rvec,
+                agg_tvec.reshape(3, 1),
+                self.marker_size * 2.0  # Make the aggregated axis larger for visibility
+            )
+            
+            # Draw aggregated pose on the right side
+            right_text_x = int(image.shape[1] - 300)  # 300 pixels from right edge
+            right_text_y = 30
+            line_height = 30
+            
+            cv2.putText(image, "Aggregated Camera Pose:", 
+                      (right_text_x, right_text_y), font, font_scale, (255, 0, 0), font_thickness)
+            right_text_y += int(line_height * 1.5)
+            
+            cv2.putText(image, "Position (m):", 
+                      (right_text_x, right_text_y), font, font_scale, (255, 0, 0), font_thickness)
+            right_text_y += line_height
+            
+            cv2.putText(image, f"X: {agg_pos[0]:.3f}", 
+                      (right_text_x, right_text_y), font, font_scale, (255, 0, 0), font_thickness)
+            right_text_y += line_height
+            
+            cv2.putText(image, f"Y: {agg_pos[1]:.3f}", 
+                      (right_text_x, right_text_y), font, font_scale, (255, 0, 0), font_thickness)
+            right_text_y += line_height
+            
+            cv2.putText(image, f"Z: {agg_pos[2]:.3f}", 
+                      (right_text_x, right_text_y), font, font_scale, (255, 0, 0), font_thickness)
+            right_text_y += int(line_height * 1.5)
+            
+            cv2.putText(image, "Rotation (deg):", 
+                      (right_text_x, right_text_y), font, font_scale, (255, 0, 0), font_thickness)
+            right_text_y += line_height
+            
+            agg_euler = scipy.spatial.transform.Rotation.from_matrix(agg_rot).as_euler('xyz', degrees=True)
+            
+            cv2.putText(image, f"Roll: {agg_euler[0]:.1f}", 
+                      (right_text_x, right_text_y), font, font_scale, (255, 0, 0), font_thickness)
+            right_text_y += line_height
+            
+            cv2.putText(image, f"Pitch: {agg_euler[1]:.1f}", 
+                      (right_text_x, right_text_y), font, font_scale, (255, 0, 0), font_thickness)
+            right_text_y += line_height
+            
+            cv2.putText(image, f"Yaw: {agg_euler[2]:.1f}", 
+                      (right_text_x, right_text_y), font, font_scale, (255, 0, 0), font_thickness)
+            
+            print("Aggregated Camera Position:\n", agg_pos)
+            print("Aggregated Camera Rotation:\n", agg_rot)
+            print(f"Aggregated Euler Angles (deg, wrapped): Roll: {agg_euler[0]:.1f}, Pitch: {agg_euler[1]:.1f}, Yaw: {agg_euler[2]:.1f}")
         
         return image
 
@@ -313,6 +381,8 @@ def main():
     image_path = os.path.join(imgs_dir, "aruco_phone.jpg")
     image_path = os.path.join(imgs_dir, "aruco_2_img2_5in.png")
     image_path = os.path.join(imgs_dir, "spam.png")
+    image_path = "/Users/hlee/tbp/tbp.drone/imgs/spam_dataset_v2/aruco_2_spam_img2_roll0_pitch2_yaw0_location6.png"
+
     # Load image
     if not os.path.exists(image_path):
         print(f"Error: Image not found at {image_path}")
@@ -327,47 +397,12 @@ def main():
     print(f"Image type: {image.dtype}")
     
     # Detect markers
-    corners, ids, rejected = detector.detect(image, imgs_dir)
+    corners, ids, _ = detector.detect(image, imgs_dir)
     print(f"Detected markers: {ids}")
-    print(f"Number of rejected markers: {len(rejected)}")
-    if len(rejected) > 0:
-        print("Rejected marker corners:")
-        for i, rej in enumerate(rejected):
-            print(f"  Rejected marker {i}: {rej.shape}")
     
     # Draw markers and pose axes if any were detected
     if ids is not None and len(ids) > 0:
         image = detector.draw_markers_with_pose(image, corners, ids)
-        # Also print the aggregated pose to console
-        camera_positions = []
-        camera_rotations = []
-        marker3_found = False
-        marker3_index = None
-        for i, corner in enumerate(corners):
-            marker_id = ids[i][0]
-            marker_world_pos = MARKER_WORLD_POSITIONS.get(marker_id, np.array([0.0, 0.0, 0.0]))
-            if marker_id == 3:
-                marker3_found = True
-                marker3_index = i
-                print(f"World coordinate of marker 3 center: {MARKER_WORLD_POSITIONS[3]}")
-            camera_pos, camera_rot = detector.get_camera_pose(corner, marker_world_pos)
-            if camera_pos is not None and camera_rot is not None:
-                camera_positions.append(camera_pos)
-                camera_rotations.append(camera_rot)
-        if camera_positions and camera_rotations:
-            camera_positions = np.array(camera_positions)
-            camera_rotations = np.array(camera_rotations)
-            if marker3_found:
-                idx = marker3_index
-                agg_pos = camera_positions[idx]
-                agg_rot = camera_rotations[idx]
-            else:
-                agg_pos, agg_rot = detector.aggregate_camera_poses(camera_positions, camera_rotations)
-            print("Aggregated Camera Position (using marker 3 if present):", agg_pos)
-            print("Aggregated Camera Rotation:\n", agg_rot)
-            agg_euler = np.degrees(cv2.RQDecomp3x3(agg_rot)[0])
-            agg_euler = agg_euler % 360  # Wrap to [0, 360)
-            print(f"Aggregated Euler Angles (deg, wrapped): Roll: {agg_euler[0]:.1f}, Pitch: {agg_euler[1]:.1f}, Yaw: {agg_euler[2]:.1f}")
     else:
         print("No markers detected")
     
