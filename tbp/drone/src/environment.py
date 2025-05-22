@@ -29,6 +29,7 @@ from tbp.drone.src.actions import (
     TurnRight,
 )
 from tbp.drone.src.drone_pilot import DronePilot
+from tbp.drone.src.spatial import compute_relative_angle
 from tbp.monty.frameworks.environments.embodied_environment import EmbodiedEnvironment
 
 DATA_DIR = Path("~/tbp/results/drone").expanduser()
@@ -86,67 +87,59 @@ class DroneEnvironment(EmbodiedEnvironment):
         self._pilot.land()
 
     def actuate_move_forward(self, action: MoveForward) -> None:
-        distance = int(np.round(action.distance))
+        distance = action.distance
         if np.isclose(distance, 0):
             return
         if distance < 0:
-            self.actuate_move_backward(MoveBackward(self._agent_id, -distance))
+            self.actuate_move_backward(MoveBackward(-distance))
         elif distance < MINIMUM_DISTANCE:
-            self.actuate_move_backward(MoveBackward(self._agent_id, MINIMUM_DISTANCE))
-            self.actuate_move_forward(
-                MoveForward(self._agent_id, distance + MINIMUM_DISTANCE)
-            )
+            self.actuate_move_backward(MoveBackward(MINIMUM_DISTANCE))
+            self.actuate_move_forward(MoveForward(distance + MINIMUM_DISTANCE))
         else:
             self._pilot.move_forward(distance)
 
     def actuate_move_backward(self, action: MoveBackward) -> None:
-        distance = int(np.round(action.distance))
+        distance = action.distance
         if np.isclose(distance, 0):
             return
 
         if distance < 0:
-            self.actuate_move_forward(MoveForward(self._agent_id, -distance))
+            self.actuate_move_forward(MoveForward(-distance))
         elif distance < MINIMUM_DISTANCE:
-            self.actuate_move_forward(MoveForward(self._agent_id, MINIMUM_DISTANCE))
-            self.actuate_move_backward(
-                MoveBackward(self._agent_id, distance + MINIMUM_DISTANCE)
-            )
+            self.actuate_move_forward(MoveForward(MINIMUM_DISTANCE))
+            self.actuate_move_backward(MoveBackward(distance + MINIMUM_DISTANCE))
         else:
             self._pilot.move_backward(distance)
 
     def actuate_move_left(self, action: MoveLeft) -> None:
-        distance = int(np.round(action.distance))
+        distance = action.distance
         if np.isclose(distance, 0):
             return
         if distance < 0:
-            self.actuate_move_right(MoveRight(self._agent_id, -distance))
+            self.actuate_move_right(MoveRight(-distance))
         elif distance < MINIMUM_DISTANCE:
-            self.actuate_move_right(MoveRight(self._agent_id, MINIMUM_DISTANCE))
-            self.actuate_move_left(
-                MoveLeft(self._agent_id, distance + MINIMUM_DISTANCE)
-            )
+            self.actuate_move_right(MoveRight(MINIMUM_DISTANCE))
+            self.actuate_move_left(MoveLeft(distance + MINIMUM_DISTANCE))
         else:
             self._pilot.move_left(distance)
 
     def actuate_move_right(self, action: MoveRight) -> None:
-        distance = int(np.round(action.distance))
+        distance = action.distance
         if np.isclose(distance, 0):
             return
         if distance < MINIMUM_DISTANCE:
-            self.actuate_move_left(MoveLeft(self._agent_id, MINIMUM_DISTANCE))
-            self.actuate_move_right(
-                MoveRight(self._agent_id, distance + MINIMUM_DISTANCE)
-            )
+            self.actuate_move_left(MoveLeft(MINIMUM_DISTANCE))
+            self.actuate_move_right(MoveRight(distance + MINIMUM_DISTANCE))
         else:
             self._pilot.move_right(distance)
 
     def actuate_move_up(self, action: MoveUp) -> None:
-        distance = int(np.round(action.distance))
+        distance = action.distance
         if np.isclose(distance, 0):
             return
         if distance < MINIMUM_DISTANCE:
-            self.actuate_move_down(MoveDown(self._agent_id, MINIMUM_DISTANCE))
-            self.actuate_move_up(MoveUp(self._agent_id, distance + MINIMUM_DISTANCE))
+            self.actuate_move_down(MoveDown(MINIMUM_DISTANCE))
+            self.actuate_move_up(MoveUp(distance + MINIMUM_DISTANCE))
         else:
             self._pilot.move_up(distance)
 
@@ -155,10 +148,8 @@ class DroneEnvironment(EmbodiedEnvironment):
         if np.isclose(distance, 0):
             return
         if distance < MINIMUM_DISTANCE:
-            self.actuate_move_up(MoveUp(self._agent_id, MINIMUM_DISTANCE))
-            self.actuate_move_down(
-                MoveDown(self._agent_id, distance + MINIMUM_DISTANCE)
-            )
+            self.actuate_move_up(MoveUp(MINIMUM_DISTANCE))
+            self.actuate_move_down(MoveDown(distance + MINIMUM_DISTANCE))
         else:
             self._pilot.move_down(distance)
 
@@ -167,7 +158,7 @@ class DroneEnvironment(EmbodiedEnvironment):
         if np.isclose(angle, 0):
             return
         if angle < 0:
-            self.actuate_turn_right(TurnRight(self._agent_id, -angle))
+            self.actuate_turn_right(TurnRight(-angle))
         else:
             self._pilot.rotate_counter_clockwise(angle)
 
@@ -176,31 +167,32 @@ class DroneEnvironment(EmbodiedEnvironment):
         if np.isclose(angle, 0):
             return
         if angle < 0:
-            self.actuate_turn_left(TurnLeft(self._agent_id, -angle))
+            self.actuate_turn_left(TurnLeft(-angle))
         else:
             self._pilot.rotate_clockwise(angle)
 
-    def actuate_set_yaw(self, action: SetYaw) -> None:
-        cur_yaw = self._tello.get_yaw()
-        desired_yaw = action.angle
-        delta = desired_yaw - cur_yaw
+    def actuate_set_height(self, action: SetHeight) -> None:
+        current_height = self._pilot.get_height()
+        desired_height = action.height
+        delta = int(np.round(desired_height - current_height))
         if np.isclose(delta, 0):
             return
         if delta < 0:
-            self.actuate_turn_left(TurnLeft(self._agent_id, -delta))
+            self.actuate_move_down(MoveDown(-delta))
         else:
-            self.actuate_turn_right(TurnRight(self._agent_id, delta))
+            self.actuate_move_up(MoveUp(delta))
 
-    def actuate_set_height(self, action: SetHeight) -> None:
-        cur_height = self._pilot.get_height()
-        desired_height = action.height
-        delta = int(np.round(desired_height - cur_height))
-        if delta == 0:
+    def actuate_set_yaw(self, action: SetYaw) -> None:
+        current_yaw = self._pilot.get_yaw()
+        desired_yaw = action.angle
+        # delta is in [-180, 180]
+        delta = compute_relative_angle(current_yaw, desired_yaw)
+        if np.isclose(delta, 0):
             return
         if delta < 0:
-            self.actuate_move_down(MoveDown(self._agent_id, -delta))
+            self.actuate_turn_left(TurnLeft(-delta))
         else:
-            self.actuate_move_up(MoveUp(self._agent_id, delta))
+            self.actuate_turn_right(TurnRight(delta))
 
     """
     ------------------------------------------------------------------------------------------------
@@ -272,7 +264,8 @@ class DroneEnvironment(EmbodiedEnvironment):
 
     def reset(self):
         self._pilot.start()
-        return {}
+        self._pilot.takeoff()
+        return self.get_observations()
 
     def close(self):
         """Close simulator and release resources."""

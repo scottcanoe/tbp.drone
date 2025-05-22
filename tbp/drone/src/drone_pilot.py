@@ -28,7 +28,8 @@ class DronePilot(Process):
     >>> dp.shutdown()
 
     """
-    def __init__(self, tello_log_level=logging.ERROR):
+
+    def __init__(self, tello_log_level=logging.ERROR, keepalive_interval=5):
         super().__init__()
         self._action_queue = Queue()
         self._response_out, self._response_in = Pipe(duplex=False)
@@ -37,6 +38,7 @@ class DronePilot(Process):
         self._frame_read = None
         self._photo_counter = 0
         self._last_keepalive = datetime.now()
+        self._keepalive_interval = keepalive_interval
         self._tello_log_level = tello_log_level
 
     # ----- Client API -----
@@ -52,6 +54,9 @@ class DronePilot(Process):
 
     def get_height(self):
         return self.call(GetHeight()) / 100
+
+    def get_yaw(self):
+        return self.call(GetYaw())
 
     def move_left(self, distance_m=0.20):
         distance = round(distance_m * 100)
@@ -130,7 +135,9 @@ class DronePilot(Process):
 
             # Send a query in case we haven't processed a message during this loop
             now = datetime.now()
-            if now - self._last_keepalive >= timedelta(seconds=10):
+            if now - self._last_keepalive >= timedelta(
+                seconds=self._keepalive_interval
+            ):
                 self._tello.send_read_command("battery?")
                 self._last_keepalive = now
 
@@ -157,13 +164,17 @@ class GetHeight(DroneCommand):
     def act(self, _pilot, tello):
         return tello.get_height()
 
+class GetYaw(DroneCommand):
+    def act(self, _pilot, tello):
+        return tello.get_yaw()
+
 
 class MoveBase(DroneCommand):
     """Base for move commands.
 
     Handles error checking during construction."""
     def __init__(self, distance):
-        if not 20 < distance < 500:
+        if not 20 <= distance <= 500:
             raise ValueError("Tello drone cannot move less than 20 cm or "
                              "more than 500 cm in a single move command.")
 

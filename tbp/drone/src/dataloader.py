@@ -36,6 +36,8 @@ class DroneDataLoader(EnvironmentDataLoader):
         return self
 
     def __next__(self):
+        if self._action_counter == len(self._actions):
+            raise StopIteration
         if self._action_counter == 0:
             # Return first observation after 'reset' before any action is applied
             self._action_counter += 1
