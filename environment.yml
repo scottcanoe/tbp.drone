@@ -16,7 +16,7 @@
 # Finally, activate the environment with:
 #     $ conda activate paper # TODO: Update to your paper's name
 #
-name: drone # TODO: Update to your paper's name
+name: drone
 channels:
   - aihabitat
   - pytorch
@@ -36,5 +36,5 @@ dependencies:
     - gradio_imageslider
     - gradio==4.29.0
     - matplotlib
-    - torch
+    - torch>=2.0.0
     - torchvision
