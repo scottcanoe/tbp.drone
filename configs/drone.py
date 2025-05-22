@@ -8,34 +8,34 @@
 # https://opensource.org/licenses/MIT.
 
 """Config to just get Drone flying."""
-import copy
-import os
 from dataclasses import dataclass, field
-from itertools import product
-from numbers import Number
 from pathlib import Path
 from typing import (
-    Any,
     Callable,
-    ClassVar,
     Dict,
-    Iterable,
     List,
-    Mapping,
-    Optional,
-    Protocol,
     Union,
 )
 
 import numpy as np
-import wandb
-from scipy.spatial.transform import Rotation
 
-from tbp.drone.src.dataset import DroneDatasetArgs, DroneEnvironmentDataset
-from tbp.monty.frameworks.actions.action_samplers import (
-    ConstantSampler,
-    UniformlyDistributedSampler,
+from tbp.drone.src.actions import (
+    Action,
+    Land,
+    MoveBackward,
+    MoveDown,
+    MoveForward,
+    MoveLeft,
+    MoveRight,
+    MoveUp,
+    SetHeight,
+    SetYaw,
+    TakeOff,
+    TurnLeft,
+    TurnRight,
 )
+from tbp.drone.src.dataloader import DroneDataLoader
+from tbp.drone.src.dataset import DroneDatasetArgs, DroneEnvironmentDataset
 from tbp.monty.frameworks.config_utils.config_args import (
     LoggingConfig,
     MontyArgs,
@@ -51,41 +51,23 @@ from tbp.monty.frameworks.config_utils.make_dataset_configs import (
     get_object_names_by_idx,
 )
 from tbp.monty.frameworks.config_utils.policy_setup_utils import (
-    make_base_policy_config,
-    make_curv_surface_policy_config,
-    make_informed_policy_config,
     make_naive_scan_policy_config,
-    make_surface_policy_config,
 )
 from tbp.monty.frameworks.environments import embodied_data as ED
 from tbp.monty.frameworks.experiments import (
     MontyObjectRecognitionExperiment,
     MontySupervisedObjectPretrainingExperiment,
 )
-from tbp.monty.frameworks.models.abstract_monty_classes import Monty
 from tbp.monty.frameworks.models.displacement_matching import DisplacementGraphLM
 from tbp.monty.frameworks.models.evidence_matching import (
     MontyForEvidenceGraphMatching,
 )
-from tbp.monty.frameworks.models.graph_matching import MontyForGraphMatching
-from tbp.monty.frameworks.models.monty_base import (
-    LearningModuleBase,
-    MontyBase,
-    SensorModuleBase,
-)
 from tbp.monty.frameworks.models.motor_policies import (
-    BasePolicy,
-    InformedPolicy,
     NaiveScanPolicy,
-    SurfacePolicy,
-    SurfacePolicyCurvatureInformed,
 )
-from tbp.monty.frameworks.models.motor_system import MotorSystem
 from tbp.monty.frameworks.models.sensor_modules import (
     DetailedLoggingSM,
     FeatureChangeSM,
-    HabitatDistantPatchSM,
-    HabitatSurfacePatchSM,
 )
 
 # ------------------------------------------------------------------------------
@@ -107,11 +89,8 @@ class DroneEvalLoggingConfig(LoggingConfig):
 
 @dataclass
 class DroneEvalDataLoaderArgs:
-    """_summary_
-
-    Returns:
-        _type_: _description_
-    """
+    object_name: str
+    actions: List[Action]
 
 
 @dataclass
@@ -227,12 +206,10 @@ drone_test = dict(
     monty_config=DroneEvalMontyConfig(),
     dataset_class=DroneEnvironmentDataset,
     dataset_args=DroneDatasetArgs(),
-    eval_dataloader_class=ED.EnvironmentDataLoaderPerObject,
-    eval_dataloader_args=EnvironmentDataloaderPerObjectArgs(
-        object_names=["potted_meat_can"],
-        object_init_sampler=PredefinedObjectInitializer(
-            rotations=[np.array([0, 0, 0])]
-        ),
+    eval_dataloader_class=DroneDataLoader,
+    eval_dataloader_args=DroneEvalDataLoaderArgs(
+        object_name="potted_meat_can",
+        actions=[Action("move_forward", 10), Action("move_backward", 10)],
     ),
 )
 
