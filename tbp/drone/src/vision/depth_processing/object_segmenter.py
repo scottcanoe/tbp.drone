@@ -28,7 +28,7 @@ class ObjectSegmenter:
             model_type (str): Type of SAM model to use ('vit_b').
             model_path (Optional[str]): Path to the model weights. If None, uses default path.
         """
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
         self.model_type = model_type
         
         if model_path is None:

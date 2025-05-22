@@ -26,7 +26,7 @@ class DepthEstimator:
         Args:
             model_path (Optional[str]): Path to the model weights. If None, uses default path.
         """
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
         self.model_configs = {
             'vitb': {'encoder': 'vitb', 'features': 128, 'out_channels': [96, 192, 384, 768]}
         }
