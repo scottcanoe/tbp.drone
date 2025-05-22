@@ -28,7 +28,7 @@ class DronePilot(Process):
     >>> dp.shutdown()
 
     """
-    def __init__(self):
+    def __init__(self, tello_log_level=logging.ERROR):
         super().__init__()
         self._action_queue = Queue()
         self._response_out, self._response_in = Pipe(duplex=False)
@@ -37,6 +37,7 @@ class DronePilot(Process):
         self._frame_read = None
         self._photo_counter = 0
         self._last_keepalive = datetime.now()
+        self._tello_log_level = tello_log_level
 
     # ----- Client API -----
 
@@ -111,6 +112,7 @@ class DronePilot(Process):
 
     def run(self):
         self._tello = Tello()
+        self._tello.LOGGER.setLevel(self._tello_log_level)
         self._tello.connect(wait_for_state=True)
         self._tello.streamon()
         self._frame_read = self._tello.get_frame_read(with_queue=True, max_queue_len=1)
