@@ -1,56 +1,335 @@
-from typing import List, Dict, Optional, Tuple
+import datetime
+import json
+import os
+import time
+from collections import defaultdict
+from dataclasses import dataclass
+from numbers import Number
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
+
+import numpy as np
+import quaternion
+from djitellopy import Tello
+
+from tbp.drone.src.actions import (
+    Action,
+    DroneActionSpace,
+    Land,
+    MoveBackward,
+    MoveDown,
+    MoveForward,
+    MoveLeft,
+    MoveRight,
+    MoveUp,
+    SetHeight,
+    SetYaw,
+    TakeOff,
+    TurnLeft,
+    TurnRight,
+)
+from tbp.drone.src.drone_pilot import DronePilot
 from tbp.monty.frameworks.environments.embodied_environment import EmbodiedEnvironment
-from tbp.drone.src.dji_tello.simulator import DroneSim
-from tbp.drone.src.dji_tello.simulator import DroneAgentConfig
+
+DATA_DIR = Path("~/tbp/results/drone").expanduser()
+MINIMUM_DISTANCE = 0.2  # Minimal traversible distance by drone in meters.
+
 
 class DroneEnvironment(EmbodiedEnvironment):
-    def __init__(
-        self,
-        agents: List[DroneAgentConfig],
-        scene_id: Optional[str] = None,
-        seed: int = 42,
-        data_path: Optional[str] = None,
-    ):
+    """Main interface to Drone simulator.
+
+    Gets created by DroneEnvironmentDataset.
+    """
+
+    def __init__(self):
         super().__init__()
-        self.agents = []
-        for config in agents:
-            agent_type = config["agent_type"]
-            agent_args = config["agent_args"]
-            agent = agent_type(**agent_args)
-            self.agents.append(agent)
-            
-        self.env = DroneSim(
-            agents=self.agents,
-            scene_id=scene_id,
-            seed=seed,
-            data_path=data_path,
-        )
+
+        self._agent_id = "agent_id_0"
+
+        self._pilot = DronePilot()
+        self._position = np.zeros(3)
+        self._rotation = quaternion.quaternion(1, 0, 0, 0)
+        self._step_counter = 0
+
+        # dead-reckoning pose
+        self.agent_pose_dr = {
+            "position": np.zeros(3),
+            "rotation": quaternion.quaternion(1, 0, 0, 0),
+        }
 
     @property
-    def action_space(self):
-        return self.env.action_space
+    def action_space(self) -> DroneActionSpace:
+        return DroneActionSpace(
+            "TakeOff",
+            "Land",
+            "MoveForward",
+            "MoveBackward",
+            "MoveLeft",
+            "MoveRight",
+            "MoveUp",
+            "MoveDown",
+            "TurnLeft",
+            "TurnRight",
+            "SetYaw",
+            "SetHeight",
+        )
 
-    def add_object(
-        self,
-        name: str,
-        position: Tuple[float, float, float] = (0.0, 0.0, 0.0),
-        rotation: Tuple[float, float, float, float] = (1.0, 0.0, 0.0, 0.0),
-        scale: Tuple[float, float, float] = (1.0, 1.0, 1.0),
-        semantic_id: Optional[str] = None,
-    ):
-        return self.env.add_object(name, position, rotation, scale, semantic_id)
+    """
+    ------------------------------------------------------------------------------------------------
+    Drone Actuating Methods
+    """
+
+    def actuate_takeoff(self, action: TakeOff):
+        self._pilot.takeoff()
+
+    def actuate_land(self, action: Land):
+        self._pilot.land()
+
+    def actuate_move_forward(self, action: MoveForward) -> None:
+        distance = int(np.round(action.distance))
+        if np.isclose(distance, 0):
+            return
+        if distance < 0:
+            self.actuate_move_backward(MoveBackward(self._agent_id, -distance))
+        elif distance < MINIMUM_DISTANCE:
+            self.actuate_move_backward(MoveBackward(self._agent_id, MINIMUM_DISTANCE))
+            self.actuate_move_forward(
+                MoveForward(self._agent_id, distance + MINIMUM_DISTANCE)
+            )
+        else:
+            self._pilot.move_forward(distance)
+
+    def actuate_move_backward(self, action: MoveBackward) -> None:
+        distance = int(np.round(action.distance))
+        if np.isclose(distance, 0):
+            return
+
+        if distance < 0:
+            self.actuate_move_forward(MoveForward(self._agent_id, -distance))
+        elif distance < MINIMUM_DISTANCE:
+            self.actuate_move_forward(MoveForward(self._agent_id, MINIMUM_DISTANCE))
+            self.actuate_move_backward(
+                MoveBackward(self._agent_id, distance + MINIMUM_DISTANCE)
+            )
+        else:
+            self._pilot.move_backward(distance)
+
+    def actuate_move_left(self, action: MoveLeft) -> None:
+        distance = int(np.round(action.distance))
+        if np.isclose(distance, 0):
+            return
+        if distance < 0:
+            self.actuate_move_right(MoveRight(self._agent_id, -distance))
+        elif distance < MINIMUM_DISTANCE:
+            self.actuate_move_right(MoveRight(self._agent_id, MINIMUM_DISTANCE))
+            self.actuate_move_left(
+                MoveLeft(self._agent_id, distance + MINIMUM_DISTANCE)
+            )
+        else:
+            self._pilot.move_left(distance)
+
+    def actuate_move_right(self, action: MoveRight) -> None:
+        distance = int(np.round(action.distance))
+        if np.isclose(distance, 0):
+            return
+        if distance < MINIMUM_DISTANCE:
+            self.actuate_move_left(MoveLeft(self._agent_id, MINIMUM_DISTANCE))
+            self.actuate_move_right(
+                MoveRight(self._agent_id, distance + MINIMUM_DISTANCE)
+            )
+        else:
+            self._pilot.move_right(distance)
+
+    def actuate_move_up(self, action: MoveUp) -> None:
+        distance = int(np.round(action.distance))
+        if np.isclose(distance, 0):
+            return
+        if distance < MINIMUM_DISTANCE:
+            self.actuate_move_down(MoveDown(self._agent_id, MINIMUM_DISTANCE))
+            self.actuate_move_up(MoveUp(self._agent_id, distance + MINIMUM_DISTANCE))
+        else:
+            self._pilot.move_up(distance)
+
+    def actuate_move_down(self, action: MoveDown) -> None:
+        distance = action.distance
+        if np.isclose(distance, 0):
+            return
+        if distance < MINIMUM_DISTANCE:
+            self.actuate_move_up(MoveUp(self._agent_id, MINIMUM_DISTANCE))
+            self.actuate_move_down(
+                MoveDown(self._agent_id, distance + MINIMUM_DISTANCE)
+            )
+        else:
+            self._pilot.move_down(distance)
+
+    def actuate_turn_left(self, action: TurnLeft) -> None:
+        angle = action.angle
+        if np.isclose(angle, 0):
+            return
+        if angle < 0:
+            self.actuate_turn_right(TurnRight(self._agent_id, -angle))
+        else:
+            self._pilot.rotate_counter_clockwise(angle)
+
+    def actuate_turn_right(self, action: TurnRight) -> None:
+        angle = action.angle
+        if np.isclose(angle, 0):
+            return
+        if angle < 0:
+            self.actuate_turn_left(TurnLeft(self._agent_id, -angle))
+        else:
+            self._pilot.rotate_clockwise(angle)
+
+    def actuate_set_yaw(self, action: SetYaw) -> None:
+        cur_yaw = self._tello.get_yaw()
+        desired_yaw = action.angle
+        delta = desired_yaw - cur_yaw
+        if np.isclose(delta, 0):
+            return
+        if delta < 0:
+            self.actuate_turn_left(TurnLeft(self._agent_id, -delta))
+        else:
+            self.actuate_turn_right(TurnRight(self._agent_id, delta))
+
+    def actuate_set_height(self, action: SetHeight) -> None:
+        cur_height = self._pilot.get_height()
+        desired_height = action.height
+        delta = int(np.round(desired_height - cur_height))
+        if delta == 0:
+            return
+        if delta < 0:
+            self.actuate_move_down(MoveDown(self._agent_id, -delta))
+        else:
+            self.actuate_move_up(MoveUp(self._agent_id, delta))
+
+    """
+    ------------------------------------------------------------------------------------------------
+    Interface used by Dataset (required)
+    """
+
+    def apply_action(self, action: Action) -> Dict[str, Dict]:
+        """Execute given action in the environment.
+
+        Args:
+            action: Dictionary containing action name and parameters
+
+        Returns:
+            Dictionary with observations grouped by agent_id
+        """
+        action_name = action.get("name")
+        if action_name not in self._action_space:
+            raise ValueError(f"Invalid action name: {action_name}")
+
+        # Initialize Tello connection if needed
+        if self._pilot is None:
+            self.start()
+
+        action.act(self)
+
+        # Get updated observations
+        return self.get_observations()
+
+    def get_state(self) -> Dict[str, Dict]:
+        """Get agent and sensor states.
+
+        Returns:
+            Dictionary with agent poses and states
+        """
+        patch_state = {
+            "patch.depth": {
+                "rotation": quaternion.quaternion(1, 0, 0, 0),
+                "position": np.zeros(3),
+            },
+            "patch.rgba": {
+                "rotation": quaternion.quaternion(1, 0, 0, 0),
+                "position": np.zeros(3),
+            },
+        }
+        view_finder_state = {
+            "view_finder.depth": {
+                "rotation": quaternion.quaternion(1, 0, 0, 0),
+                "position": np.zeros(3),
+            },
+            "view_finder.rgba": {
+                "rotation": quaternion.quaternion(1, 0, 0, 0),
+                "position": np.zeros(3),
+            },
+        }
+        agent_state = {
+            "sensors": {
+                "patch": patch_state,
+                "view_finder": view_finder_state,
+            },
+            "rotation": quaternion.quaternion(1, 0, 0, 0),
+            "position": np.zeros(3),
+        }
+        return {self._agent_id: agent_state}
 
     def step(self, action) -> Dict[str, Dict]:
-        return self.env.apply_action(action)
-
-    def remove_all_objects(self):
-        return self.env.remove_all_objects()
+        obs = self.apply_action(action)
+        self._step_counter += 1
+        return obs
 
     def reset(self):
-        return self.env.reset()
+        self._pilot.start()
+        return {}
 
     def close(self):
-        return self.env.close()
+        """Close simulator and release resources."""
+        if self._pilot is not None:
+            self._pilot.land()
+            self._pilot.shutdown()
 
-    def get_state(self):
-        return self.env.get_state()
+    """
+    ------------------------------------------------------------------------------------------------
+    Internally Used Methods
+    """
+
+    def get_observations(self) -> Dict[str, Dict]:
+        """Get sensor observations.
+
+        Called by `DroneEnvironment.apply_action`.
+
+        Returns:
+            Dictionary with all sensor observations grouped by agent_id
+        """
+        if self._pilot is None:
+            return {}
+        if isinstance(self._pilot, Pilot):
+            frame = self._pilot.get_frame_read().frame
+
+        # Process observations for each agent
+        observations = {
+            "agent_id_0": {
+                "patch": {
+                    "depth": None,
+                    "rgba": None,
+                    "semantic_3d": None,
+                    "sensor_frame_data": None,
+                    "world_camera": None,
+                },
+                "view_finder": {
+                    "depth": None,
+                    "rgba": frame,
+                },
+            }
+        }
+        return observations
+
+    """
+    ------------------------------------------------------------------------------------------------
+    Unused but required methods
+    """
+
+    def add_object(self, *args, **kwargs):
+        # TODO The NotImplementedError highlights an issue with the EmbodiedEnvironment
+        #      interface and how the class hierarchy is defined and used.
+        raise NotImplementedError("DroneEnvironment does not support adding objects")
+
+    def remove_all_objects(self):
+        # TODO The NotImplementedError highlights an issue with the EmbodiedEnvironment
+        #      interface and how the class hierarchy is defined and used.
+        raise NotImplementedError(
+            "DroneEnvironment does not support removing all objects"
+        )
+

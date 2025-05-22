@@ -9,5 +9,5 @@
 
 from .drone import CONFIGS as DRONE_CONFIGS
 
-CONFIG = dict()
-CONFIG.update(DRONE_CONFIGS)
+CONFIGS = dict()
+CONFIGS.update(DRONE_CONFIGS)
