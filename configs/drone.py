@@ -209,7 +209,7 @@ drone_test = dict(
     eval_dataloader_class=DroneDataLoader,
     eval_dataloader_args=DroneEvalDataLoaderArgs(
         object_name="potted_meat_can",
-        actions=[Action("move_forward", 10), Action("move_backward", 10)],
+        actions=[TakeOff(), MoveLeft(0.2), MoveRight(0.2)],
     ),
 )
 

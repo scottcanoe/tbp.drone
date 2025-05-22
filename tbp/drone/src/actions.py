@@ -25,109 +25,117 @@ __all__ = [
 class DroneActionSpace(tuple, ActionSpace):
     """Action space for 2D data environments."""
 
+    @classmethod
+    def sample(cls, agent_id: str, sampler: "ActionSampler") -> None:
+        return None
+
     def sample(self):
         return self.rng.choice(self)
 
+class DroneAction(Action):
+    def __init__(self):
+        super().__init__(agent_id="agent_id_0")
 
-class TakeOff(Action):
-    def __init__(self, agent_id: str):
-        super().__init__(agent_id=agent_id)
+    @classmethod
+    def sample(cls, agent_id: str, sampler: "ActionSampler") -> None:
+        return None
+
+
+class TakeOff(DroneAction):
 
     def act(self, actuator: Actuator):
         actuator.actuate_takeoff(self)
 
 
-class Land(Action):
-    def __init__(self, agent_id: str):
-        super().__init__(agent_id=agent_id)
+class Land(DroneAction):
 
     def act(self, actuator: Actuator):
         actuator.actuate_land(self)
 
 
-class TurnLeft(Action):
-    def __init__(self, agent_id: str, angle: Number):
-        super().__init__(agent_id=agent_id)
+class TurnLeft(DroneAction):
+    def __init__(self, angle: Number):
+        super().__init__()
         self.angle = angle
 
     def act(self, actuator: Actuator):
         actuator.actuate_turn_left(self)
 
 
-class TurnRight(Action):
-    def __init__(self, agent_id: str, angle: Number):
-        super().__init__(agent_id=agent_id)
+class TurnRight(DroneAction):
+    def __init__(self, angle: Number):
+        super().__init__()
         self.angle = angle
 
     def act(self, actuator: Actuator):
         actuator.actuate_turn_right(self)
 
 
-class SetYaw(Action):
-    def __init__(self, agent_id: str, angle: Number):
-        super().__init__(agent_id=agent_id)
+class SetYaw(DroneAction):
+    def __init__(self, angle: Number):
+        super().__init__()
         self.angle = angle
 
     def act(self, actuator: Actuator):
         actuator.actuate_set_yaw(self)
 
 
-class MoveForward(Action):
-    def __init__(self, agent_id: str, distance: Number):
-        super().__init__(agent_id=agent_id)
+class MoveForward(DroneAction):
+    def __init__(self, distance: Number):
+        super().__init__()
         self.distance = distance
 
     def act(self, actuator: Actuator):
         actuator.actuate_move_forward(self)
 
 
-class MoveBackward(Action):
-    def __init__(self, agent_id: str, distance: Number):
-        super().__init__(agent_id=agent_id)
+class MoveBackward(DroneAction):
+    def __init__(self, distance: Number):
+        super().__init__()
         self.distance = distance
 
     def act(self, actuator: Actuator):
         actuator.actuate_move_backward(self)
 
 
-class MoveLeft(Action):
-    def __init__(self, agent_id: str, distance: Number):
-        super().__init__(agent_id=agent_id)
+class MoveLeft(DroneAction):
+    def __init__(self, distance: Number):
+        super().__init__()
         self.distance = distance
 
     def act(self, actuator: Actuator):
         actuator.actuate_move_left(self)
 
 
-class MoveRight(Action):
-    def __init__(self, agent_id: str, distance: Number):
-        super().__init__(agent_id=agent_id)
+class MoveRight(DroneAction):
+    def __init__(self, distance: Number):
+        super().__init__()
         self.distance = distance
 
     def act(self, actuator: Actuator):
         actuator.actuate_move_right(self)
 
 
-class MoveUp(Action):
-    def __init__(self, agent_id: str, distance: Number):
-        super().__init__(agent_id=agent_id)
+class MoveUp(DroneAction):
+    def __init__(self, distance: Number):
+        super().__init__()
         self.distance = distance
 
     def act(self, actuator: Actuator):
         actuator.actuate_move_up(self)
 
 
-class MoveDown(Action):
-    def __init__(self, agent_id: str, distance: Number):
-        super().__init__(agent_id=agent_id)
+class MoveDown(DroneAction):
+    def __init__(self, distance: Number):
+        super().__init__()
         self.distance = distance
 
     def act(self, actuator: Actuator):
         actuator.actuate_move_down(self)
 
-class SetHeight(Action):
-    def __init__(self, agent_id: str, height: Number):
-        super().__init__(agent_id=agent_id)
+class SetHeight(DroneAction):
+    def __init__(self, height: Number):
+        super().__init__()
         self.height = height
 
     def act(self, actuator: Actuator):

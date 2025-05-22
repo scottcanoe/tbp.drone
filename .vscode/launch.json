@@ -5,12 +5,22 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+        },
+        {
             "name": "Debug Drone Environment",
             "type": "debugpy",
             "request": "launch",
             "program": "run.py",
             "console": "integratedTerminal",
-            "args": ["--experiment=pretrain_drone"],
+            "args": [
+                "--experiment=pretrain_drone"
+            ],
             "justMyCode": false,
             "stopOnEntry": true,
         }
