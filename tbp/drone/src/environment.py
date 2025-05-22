@@ -30,64 +30,9 @@ from tbp.drone.src.actions import (
 )
 from tbp.drone.src.drone_pilot import DronePilot
 from tbp.monty.frameworks.environments.embodied_environment import EmbodiedEnvironment
-from tbp.monty.frameworks.models.motor_system_state import (
-    AgentState,
-    MotorSystemState,
-    SensorState,
-)
 
 DATA_DIR = Path("~/tbp/results/drone").expanduser()
 MINIMUM_DISTANCE = 0.2  # Minimal traversible distance by drone in meters.
-
-
-class TelloPilot:
-    def __init__(self):
-        self._tello = Tello()
-        self._tello.connect(wait_for_state=True)
-        self._tello.streamon()
-        self._tello.get_frame_read()  # first capture is always blank
-
-    def takeoff(self):
-        self._tello.takeoff()
-
-    def land(self):
-        self._tello.land()
-
-    def move_forward(self, distance: int):
-        self._tello.move_forward(round(100 * distance))
-
-    def move_backward(self, distance: int):
-        self._tello.move_backward(round(100 * distance))
-
-    def move_left(self, distance: int):
-        self._tello.move_left(round(100 * distance))
-
-    def move_right(self, distance: int):
-        self._tello.move_right(round(100 * distance))
-
-    def move_up(self, distance: int):
-        self._tello.move_up(round(100 * distance))
-
-    def move_down(self, distance: int):
-        self._tello.move_down(round(100 * distance))
-
-    def rotate_counter_clockwise(self, angle: int):
-        self._tello.rotate_counter_clockwise(round(angle))
-
-    def rotate_clockwise(self, angle: int):
-        self._tello.rotate_clockwise(round(angle))
-
-    def get_frame_read(self):
-        return self._tello.get_frame_read()
-
-    def get_battery(self):
-        return self._tello.get_battery()
-
-    def get_height(self):
-        return self._tello.get_height() / 100
-
-    def take_picture(self):
-        return self._tello.get_frame_read().frame
 
 
 class DroneEnvironment(EmbodiedEnvironment):
@@ -96,10 +41,10 @@ class DroneEnvironment(EmbodiedEnvironment):
     Gets created by DroneEnvironmentDataset.
     """
 
-    def __init__(self, agent_id: str = "agent_id_0"):
+    def __init__(self):
         super().__init__()
 
-        self._agent_id = agent_id
+        self._agent_id = "agent_id_0"
 
         self._pilot = DronePilot()
         self._position = np.zeros(3)
@@ -326,19 +271,14 @@ class DroneEnvironment(EmbodiedEnvironment):
         return obs
 
     def reset(self):
+        self._pilot.start()
         return {}
-        # self._pilot.reset()
 
     def close(self):
         """Close simulator and release resources."""
         if self._pilot is not None:
-            try:
-                self._pilot.land()
-                self._pilot.streamoff()
-                self._pilot.end()
-            except:
-                pass
-            self._pilot = None
+            self._pilot.land()
+            self._pilot.shutdown()
 
     """
     ------------------------------------------------------------------------------------------------
@@ -375,25 +315,6 @@ class DroneEnvironment(EmbodiedEnvironment):
             }
         }
         return observations
-
-    def start(self) -> None:
-        """Initialize the drone.
-
-        Initializes the output directory and the camera. Then takes off and
-        initializes position and rotation based on the drone's post-takeoff state.
-        """
-        self._pilot = Tello()
-        self._pilot.connect(wait_for_state=True)
-
-        # Initialize camera
-        self._pilot.streamon()
-        self._pilot.get_frame_read()  # first capture is always blank
-        self._image_counter = 0
-
-        # Take off, and initialize position, rotation, etc.
-        self._pilot.takeoff()
-        self._position = np.zeros(3)
-        self._rotation = quaternion.quaternion(1, 0, 0, 0)
 
     """
     ------------------------------------------------------------------------------------------------
