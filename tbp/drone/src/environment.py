@@ -107,7 +107,7 @@ class DroneEnvironment(EmbodiedEnvironment):
     _action_space = DroneActionSpace([])
     _initial_agent_position = np.array([0.0, 0.0, 0.0])
     _initial_agent_rotation = quaternion.quaternion(1, 0, 0, 0)
-    _initial_sensor_position = np.array([0.0, 0.0, 0.05])
+    _initial_sensor_position = np.array([0.0, 0.0, 0.0])
     _initial_sensor_rotation = quaternion.quaternion(1, 0, 0, 0)
 
     def __init__(self, patch_size: int = 64):
@@ -115,18 +115,18 @@ class DroneEnvironment(EmbodiedEnvironment):
 
         self._agent = Agent(
             name="agent_id_0",
-            position=self._initial_agent_position,
-            rotation=self._initial_agent_rotation,
+            position=self._initial_agent_position.copy(),
+            rotation=self._initial_agent_rotation.copy(),
             sensors={
                 "patch": Sensor(
                     name="patch",
-                    position=self._initial_sensor_position,
-                    rotation=self._initial_sensor_rotation,
+                    position=self._initial_sensor_position.copy(),
+                    rotation=self._initial_sensor_rotation.copy(),
                 ),
                 "view_finder": Sensor(
                     name="view_finder",
-                    position=self._initial_sensor_position,
-                    rotation=self._initial_sensor_rotation,
+                    position=self._initial_sensor_position.copy(),
+                    rotation=self._initial_sensor_rotation.copy(),
                 ),
             },
         )
@@ -147,11 +147,11 @@ class DroneEnvironment(EmbodiedEnvironment):
         return self._agent.observation_dict()
 
     def _reset_agent(self):
-        self._agent.position = self._initial_agent_position
-        self._agent.rotation = self._initial_agent_rotation
+        self._agent.position = self._initial_agent_position.copy()
+        self._agent.rotation = self._initial_agent_rotation.copy()
         for sensor in self._agent.sensors.values():
-            sensor.position = self._initial_sensor_position
-            sensor.rotation = self._initial_sensor_rotation
+            sensor.position = self._initial_sensor_position.copy()
+            sensor.rotation = self._initial_sensor_rotation.copy()
             sensor.rgba = None
             sensor.depth = None
 
@@ -468,12 +468,14 @@ class DroneImageEnvironment(DroneEnvironment):
         self.data_path = data_path
 
         # Find the poses/images in the data path.
-        image_dirs = [
+        stepisode_dirs = [
             p for p in self.data_path.glob("*") if p.is_dir() and p.name.isdigit()
         ]
-        image_nums = sorted([int(p.name) for p in image_dirs])
-        self._image_dirs = [self.data_path / str(num) for num in image_nums]
-        self._current_image_index = 0
+        stepisode_nums = sorted([int(p.name) for p in stepisode_dirs])
+        self._stepisode_dirs = [self.data_path / str(num) for num in stepisode_nums]
+
+        self._current_stepisode = 0
+        self._next_action = None
 
     """
     ------------------------------------------------------------------------------------
@@ -505,86 +507,9 @@ class DroneImageEnvironment(DroneEnvironment):
         self._step_counter += 1
         return obs
 
-    def step(self, action: Action):
-        """Retrieve the next observation.
-
-        Args:
-            action: moving up, down, left or right from current location.
-            amount: Amount of pixels to move at once.
-
-        Returns:
-            observation (dict).
-        """
-        if action.name in self._valid_actions:
-            amount = action.rotation_degrees
-        else:
-            amount = 0
-
-        if np.abs(amount) < 1:
-            amount = 1
-        # Make sure amount is int since we are moving using pixel indices
-        amount = int(amount)
-        query_loc = self.get_next_loc(action.name, amount)
-        (
-            depth_patch,
-            rgb_patch,
-            depth3d_patch,
-            sensor_frame_patch,
-        ) = self.get_image_patch(
-            query_loc,
-        )
-        self.current_loc = query_loc
-        obs = {
-            "agent_id_0": {
-                "patch": {
-                    "depth": depth_patch,
-                    "rgba": rgb_patch,
-                    "semantic_3d": depth3d_patch,
-                    "sensor_frame_data": sensor_frame_patch,
-                    "world_camera": self.world_camera,
-                    "pixel_loc": query_loc,  # Save pixel loc for plotting
-                },
-                "view_finder": {
-                    "depth": self.current_depth_image,
-                    "rgba": self.current_rgb_image,
-                },
-            }
-        }
-        return obs
-
-    # def get_state(self):
-    #     """Get agent state.
-
-    #     Returns:
-    #         The agent state.
-    #     """
-    #     loc = self.current_loc
-    #     # Provide LM w/ sensor position in 3D, body-centric coordinates
-    #     # instead of pixel indices
-    #     sensor_position = self.get_3d_coordinates_from_pixel_indices(loc[:2])
-
-    #     # NOTE: This is super hacky and only works for 1 agent with 1 sensor
-    #     state = {
-    #         "agent_id_0": {
-    #             "sensors": {
-    #                 "patch" + ".depth": {
-    #                     "rotation": self.rotation,
-    #                     "position": sensor_position,
-    #                 },
-    #                 "patch" + ".rgba": {
-    #                     "rotation": self.rotation,
-    #                     "position": sensor_position,
-    #                 },
-    #             },
-    #             "rotation": self.rotation,
-    #             "position": np.array([0, 0, 0]),
-    #         }
-    #     }
-    #     return state
-
-    def _init_current_image(self):
+    def _init_stepisode(self):
         # Load image and state
-        image, state = self._load_image_and_state(self._current_image_index)
+        image, state = self._load_stepisode_data(self._current_stepisode)
 
         # Update agent and sensor states
         pitch, roll, yaw = state["pitch"], state["roll"], state["yaw"]
@@ -594,9 +519,8 @@ class DroneImageEnvironment(DroneEnvironment):
         # Do processing.
         # - estimate depth
         # - find arcuro, update drone position from it, etc.
-        self._current_image_index += 1
 
-    def _load_image_and_state(self, image_index: int):
+    def _load_stepisode_data(self, image_index: int):
         """Load depth and rgb data for next scene environment.
 
         Returns:
@@ -604,14 +528,14 @@ class DroneImageEnvironment(DroneEnvironment):
             current_rgb_image: The rgb image.
             start_location: The start location.
         """
-        image_dir = self.image_dirs[image_index]
-        image = imageio.imread(image_dir / "image.png")
+        stepisode_dir = self._stepisode_dirs[image_index]
+        image = imageio.imread(stepisode_dir / "image.png")
         image = image / 255.0
         image = np.concatenate(
             [image, np.ones((image.shape[0], image.shape[1], 1))], axis=-1
         )
 
-        with open(image_dir / "state.json", "r") as f:
+        with open(stepisode_dir / "state.json", "r") as f:
             state = json.load(f)
         return image, state
 
@@ -783,12 +707,3 @@ class DroneImageEnvironment(DroneEnvironment):
         ), f"Didn't extract a patch of size {self.patch_size}"
         return depth_patch, rgb_patch, depth3d_patch, sensor_frame_patch
 
-    def close(self):
-        self._current_state = None
-
-    def add_object(self, *args, **kwargs):
-        # TODO The NotImplementedError highlights an issue with the EmbodiedEnvironment
-        #      interface and how the class hierarchy is defined and used.
-        raise NotImplementedError(
-            "SaccadeOnImageEnvironment does not support adding objects"
-        )
