@@ -1,17 +1,20 @@
-import cv2
-import torch
-import numpy as np
-from PIL import Image
-import sys
 import os
+import sys
 from pathlib import Path
-from typing import Union, Tuple, Optional
+from typing import Optional, Tuple, Union
+
+import cv2
+import numpy as np
 import numpy.typing as npt
+import torch
+from PIL import Image
 
 from configs.paths import DEPTH_ANYTHING_PATH
+
 sys.path.insert(0, DEPTH_ANYTHING_PATH)
 
 from depth_anything_v2.dpt import DepthAnythingV2
+
 
 class DepthEstimator:
     """A class to handle depth estimation using the Depth Anything V2 model.
@@ -63,12 +66,7 @@ class DepthEstimator:
                 - Depth map as a 2D float32 array
                 - Original RGB image as uint8 array
         """
-        if isinstance(image, str):
-            data = np.fromfile(Path(image).expanduser(), dtype=np.uint8)
-            rgb_image = cv2.imdecode(data, cv2.IMREAD_COLOR)
-        else:
-            rgb_image = image
-            
+        rgb_image = self._as_ndarray(image)
         with torch.no_grad():
             depth_map = self.model.infer_image(rgb_image) # outputs "affine invariant" INVERSE depth map
             depth_map = 1.0 / depth_map
@@ -82,6 +80,49 @@ class DepthEstimator:
             depth_map = np.where(np.isnan(depth_map), q3, depth_map)
             
         return depth_map, rgb_image
+
+    def _as_ndarray(
+        self, image: Union[str, npt.NDArray[np.uint8]]
+    ) -> npt.NDArray[np.uint8]:
+        if isinstance(image, os.PathLike):
+            data = np.fromfile(Path(image).expanduser(), dtype=np.uint8)
+            rgb_image = cv2.imdecode(data, cv2.IMREAD_COLOR)
+        else:
+            rgb_image = image
+        return rgb_image
+
+    def __call__(
+        self,
+        image: Union[os.PathLike, npt.NDArray[np.uint8]],
+        meters: bool = True,
+    ) -> npt.NDArray[np.float32]:
+        """Estimate depth from an RGB image.
+
+        Args:
+            image (Union[str, np.ndarray]): Input RGB image, either as a file path
+            or numpy array.
+            meters (bool): Whether to convert the depth map to meters.
+
+        Returns:
+            npt.NDArray[np.float32]: Depth map as a 2D float32 array
+
+        """
+        rgb_image = self._as_ndarray(image)
+        with torch.no_grad():
+            depth_map = self.model.infer_image(rgb_image)
+        if meters:
+            depth_map = self.to_meters(depth_map)
+        return depth_map
+
+    @staticmethod
+    def to_meters(
+        depth_map: npt.NDArray[np.float32],
+    ) -> npt.NDArray[np.float32]:
+        """Correct the depth map."""
+        slope = -0.06080131811283916
+        intercept = 0.6446867000355985
+        return slope * depth_map + intercept
+
 
 def main():
     """Example usage of the DepthEstimator class."""

@@ -103,13 +103,13 @@ def compute_agent_states():
 
     stepisodes = np.arange(n_stepisodes)
     # For positions
-    location_radians_delta = 2 * np.pi / n_stepisodes
+    location_radians_delta = -2 * np.pi / n_stepisodes
     rotation_radians = np.mod(
         np.pi / 2 + location_radians_delta * stepisodes, 2 * np.pi
     )
 
     # For rotations
-    rotation_yaw_delta = -360 / n_stepisodes
+    rotation_yaw_delta = 360 / n_stepisodes
     rotation_yaws = rotation_yaw_delta * np.arange(12)
 
     positions = []
@@ -280,3 +280,75 @@ def add_summaries():
         summary_path = stepisode_dir / "summary.png"
         fig.savefig(summary_path)
         plt.show()
+
+
+env = DroneImageEnvironment(data_path="potted_meat_can_v1")
+# positions, rotations = compute_agent_states()
+
+n_stepisodes = 12
+radius = 0.27305
+height = 0.05
+agent_height_rel_ground = 8.73 / 100
+object_height_rel_ground = 3.81 / 100
+height = agent_height_rel_ground - object_height_rel_ground
+
+stepisodes = np.arange(n_stepisodes)
+# For positions
+location_radians_delta = -2 * np.pi / n_stepisodes
+rotation_radians = np.mod(np.pi / 2 + location_radians_delta * stepisodes, 2 * np.pi)
+
+# For rotations
+rotation_yaw_delta = 360 / n_stepisodes
+rotation_yaws = rotation_yaw_delta * np.arange(12)
+
+positions = []
+rotations = []
+positions_x = -radius * np.cos(rotation_radians)
+positions_z = radius * np.sin(rotation_radians)
+for i in range(n_stepisodes):
+    pos = np.array([positions_x[i], height, positions_z[i]])
+    positions.append(pos)
+    quat = pitch_roll_yaw_to_quaternion(0, 0, rotation_yaws[i])
+    rotations.append(quat)
+
+# positions, rotations = [], []
+# for i in range(12):
+#     data = env._load_stepisode_data(i)
+#     agent_state = data["agent_state"]
+#     position = np.array(agent_state["agent_position"])
+#     rotation = qt.from_float_array(np.array(agent_state["agent_rotation"]))
+#     positions.append(position)
+#     rotations.append(rotation)
+
+fig = plt.figure(figsize=(5, 5))
+ax = fig.add_subplot(1, 1, 1)
+ax.invert_xaxis()
+positions_x = np.array([p[0] for p in positions])
+positions_z = np.array([p[2] for p in positions])
+ax.plot(positions_x, positions_z, "rx")
+ax.set_aspect("equal")
+ax.set_xlabel("X")
+ax.set_ylabel("Z")
+lim = 0.3
+ax.set_xlim(lim, -lim)
+ax.set_ylim(-lim, lim)
+arrow_length = 0.05
+
+
+for i, pos in enumerate(positions):
+    x, y, z = pos
+    ax.annotate(f"{i}", (x, z), xytext=(5, 5), textcoords="offset points")
+    quat = rotations[i]
+    rot = quaternion_to_rotation(quat)
+    mat = rot.as_matrix()
+
+    origin = np.array([pos[0], pos[2]])
+    x_component = np.array([mat[0, 0], mat[0, 2]])
+    y_component = np.array([mat[2, 0], mat[2, 2]])
+
+    x_end = origin + x_component * arrow_length
+    y_end = origin + y_component * arrow_length
+    ax.plot([origin[0], x_end[0]], [origin[1], x_end[1]], "r-")
+    ax.plot([origin[0], y_end[0]], [origin[1], y_end[1]], "b-")
+
+plt.show()
