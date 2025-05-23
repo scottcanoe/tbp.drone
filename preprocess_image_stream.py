@@ -55,7 +55,8 @@ from tbp.drone.src.spatial import (
 from tbp.drone.src.vision.depth_processing.depth_estimator import DepthEstimator
 from tbp.drone.src.vision.depth_processing.object_segmenter import ObjectSegmenter
 
-DATA_PATH = Path("/Users/sknudstrup/tbp/data/worldimages/drone/potted_meat_can_v1")
+DATA_PATH = Path.home() / "tbp/data/worldimages/drone/potted_meat_can_v1"
+
 
 OCLOCK_TO_STEPISODE = {
     6: 0,
