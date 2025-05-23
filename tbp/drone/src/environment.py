@@ -47,6 +47,7 @@ class Sensor:
     name: str
     position: np.ndarray
     rotation: quaternion.quaternion
+    rgb: Optional[np.ndarray] = None
     rgba: Optional[np.ndarray] = None
     depth: Optional[np.ndarray] = None
 
@@ -443,7 +444,13 @@ class DroneImageEnvironment(DroneEnvironment):
         ]
     )
 
-    def __init__(self, patch_size: int = 64, data_path: Optional[os.PathLike] = None):
+    def __init__(
+        self,
+        patch_size: int = 64,
+        data_path: Optional[os.PathLike] = None,
+        depth_scale_factor: float = 1.0,
+        depth_range: Tuple[float, float] = (0.05, 0.4),
+    ):
         """Initialize environment.
 
         Args:
@@ -452,6 +459,8 @@ class DroneImageEnvironment(DroneEnvironment):
                 ~/tbp/data/worldimages/labeled_scenes/
         """
         super().__init__(patch_size)
+        self.depth_scale_factor = depth_scale_factor
+        self.depth_range = depth_range
 
         # Initialize data path
         if data_path is None:
@@ -520,7 +529,7 @@ class DroneImageEnvironment(DroneEnvironment):
         # - estimate depth
         # - find arcuro, update drone position from it, etc.
 
-    def _load_stepisode_data(self, image_index: int):
+    def _load_stepisode_data(self, stepisode: int):
         """Load depth and rgb data for next scene environment.
 
         Returns:
@@ -528,16 +537,33 @@ class DroneImageEnvironment(DroneEnvironment):
             current_rgb_image: The rgb image.
             start_location: The start location.
         """
-        stepisode_dir = self._stepisode_dirs[image_index]
-        image = imageio.imread(stepisode_dir / "image.png")
-        image = image / 255.0
-        image = np.concatenate(
-            [image, np.ones((image.shape[0], image.shape[1], 1))], axis=-1
-        )
+        stepisode_dir = self._stepisode_dirs[stepisode]
+        data = {}
 
-        with open(stepisode_dir / "state.json", "r") as f:
-            state = json.load(f)
-        return image, state
+        # RGB image
+        image = imageio.imread(stepisode_dir / "image.png")
+        data["image"] = image
+
+        # Depth image
+        depth = np.load(stepisode_dir / "depth.npy")
+        data["depth"] = self.depth_scale_factor * depth
+
+        # Drone state
+        with open(stepisode_dir / "drone_state.json", "r") as f:
+            drone_state = json.load(f)
+        data["drone_state"] = drone_state
+
+        # Agent state
+        with open(stepisode_dir / "agent_state.json", "r") as f:
+            agent_state = json.load(f)
+        data["agent_state"] = agent_state
+
+        # Bounding box
+        with open(stepisode_dir / "bbox.json", "r") as f:
+            bbox = json.load(f)
+        data["bbox"] = bbox
+
+        return data
 
         # state = self._agent.state_dict()
         # # Set data paths
