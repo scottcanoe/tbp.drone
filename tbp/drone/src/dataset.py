@@ -11,31 +11,6 @@ from tbp.monty.frameworks.environment_utils.transforms import DepthTo3DLocations
 from tbp.monty.frameworks.environments.embodied_data import EnvironmentDataset
 
 
-@dataclass
-class DroneEnvInitArgs:
-    """Args for DroneEnvironment"""
-
-
-@dataclass
-class DroneDatasetArgs:
-    env_init_func: Callable = field(default=DroneEnvironment)
-    env_init_args: Dict = field(
-        default_factory=lambda: DroneEnvInitArgs().__dict__
-    )
-    transform = None
-    rng = None
-
-    def __post_init__(self):
-        self.transform = []
-        #     DepthTo3DLocations(
-        #         agent
-        #         resolution=(720, 960),  # DJI Tello camera resolution
-        #         focal_length_pixels=1825.1,  # Calculated from physical parameters
-        #         optical_center=(480.0, 360.0),  # Half of resolution
-        #         get_all_points=False,  # Only get object points
-        #     )
-        # ]
-
 class DroneEnvironmentDataset(EnvironmentDataset):
     def __init__(self, env_init_func, env_init_args, rng, transform=None):
         super().__init__(env_init_func, env_init_args, rng, transform)

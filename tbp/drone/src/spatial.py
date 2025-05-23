@@ -1,6 +1,8 @@
 from numbers import Number
 
 import numpy as np
+import quaternion as qt
+from scipy.spatial.transform import Rotation
 
 
 def as_signed_angle(angle: Number) -> Number:
@@ -54,3 +56,39 @@ def reorder_quat_array(quat_array: np.ndarray, order: str) -> np.ndarray:
     else:
         msg = f"Invalid order: '{order}'. Must be one of 'xyzw' or 'wxyz'."
         raise ValueError(msg)
+
+
+def pitch_roll_yaw_to_quaternion(
+    pitch: Number,
+    roll: Number,
+    yaw: Number,
+) -> qt.quaternion:
+    """Convert pitch, roll, and yaw to a quaternion.
+
+    Args:
+        pitch: The pitch angle in degrees.
+        roll: The roll angle in degrees.
+        yaw: The yaw angle in degrees.
+
+    Returns:
+        A quaternion representing the rotation.
+    """
+    rot = Rotation.from_euler("xyz", [pitch, yaw, roll], degrees=True)
+    quat_array_xyzw = rot.as_quat()
+    quat_array_wxyz = reorder_quat_array(quat_array_xyzw, "wxyz")
+    return qt.quaternion(*quat_array_wxyz)
+
+
+def quaternion_to_rotation(quat: qt.quaternion) -> Rotation:
+    """Convert a quaternion to a rotation.
+
+    Args:
+        quat: The quaternion to convert.
+
+    Returns:
+        A rotation.
+    """
+
+    quat_array_wxyz = qt.as_float_array(quat)
+    quat_array_xyzw = reorder_quat_array(quat_array_wxyz, "xyzw")
+    return Rotation.from_quat(quat_array_xyzw)
