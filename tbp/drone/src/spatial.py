@@ -77,3 +77,18 @@ def pitch_roll_yaw_to_quaternion(
     quat_array_xyzw = rot.as_quat()
     quat_array_wxyz = reorder_quat_array(quat_array_xyzw, "wxyz")
     return qt.quaternion(*quat_array_wxyz)
+
+
+def quaternion_to_rotation(quat: qt.quaternion) -> Rotation:
+    """Convert a quaternion to a rotation.
+
+    Args:
+        quat: The quaternion to convert.
+
+    Returns:
+        A rotation.
+    """
+
+    quat_array_wxyz = qt.as_float_array(quat)
+    quat_array_xyzw = reorder_quat_array(quat_array_wxyz, "xyzw")
+    return Rotation.from_quat(quat_array_xyzw)
