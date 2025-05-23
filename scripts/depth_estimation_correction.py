@@ -57,27 +57,6 @@ from tbp.drone.src.vision.depth_processing.depth_estimator import DepthEstimator
 DATA_PATH = Path.home() / "tbp/data/worldimages/drone/"
 
 
-def draw_rect(ax, image):
-    h, w = image.shape[:2]
-    center_x = w // 2
-    center_y = h // 2
-    rect_size = 50
-    rect_x = center_x - rect_size // 2
-    rect_y = center_y - rect_size // 2
-
-    # Draw rectangle
-    rect = plt.Rectangle(
-        (rect_x, rect_y), rect_size, rect_size, fill=False, color="red", linewidth=2
-    )
-    ax.add_patch(rect)
-
-
-def depthanything_to_meters(depth):
-    """Map DepthAnything depth to meters."""
-    slope = -0.06080131811283916
-    intercept = 0.6446867000355985
-    return slope * depth + intercept
-
 
 # def fit_depthanything_to_ground_truth():
 """Fit a linear function to the depth map."""
@@ -90,19 +69,18 @@ x_pixels = np.array([330, 412, 482, 548, 602])
 gt_depths = np.array([(25 + (i - 2) * 2.54 * np.sqrt(2)) / 100 for i in range(5)])
 da_depths = np.array([da_depth_map[230, x] for x in x_pixels])
 
-# slope, intercept = np.polyfit(est_depths, gt_depths, 1)
-# new_depths = slope * est_depths + intercept
-corrected_depths = depthanything_to_meters(da_depths)
+slope, intercept = np.polyfit(da_depths, gt_depths, 1)
+corrected_depths = slope * da_depths + intercept
+# or `corrected_depths = depth_estimator.to_meters(da_depth_map)``
 
-# Plot results
-# plt.figure(figsize=(8, 6))
-# plt.scatter(da_depths, gt_depths, color="blue", label="Data points")
-# plt.plot(da_depths, corrected_depths, color="red", label="Linear fit")
-# plt.xlabel("Estimated depth")
-# plt.ylabel("Ground truth depth")
-# plt.legend()
-# plt.grid(True)
-# plt.show()
+plt.figure(figsize=(8, 6))
+plt.scatter(da_depths, gt_depths, color="blue", label="Data points")
+plt.plot(da_depths, corrected_depths, color="red", label="Linear fit")
+plt.xlabel("Estimated depth")
+plt.ylabel("Ground truth depth")
+plt.legend()
+plt.grid(True)
+plt.show()
 
 fig, axes = plt.subplots(1, 3, figsize=(10, 5))
 ax = axes[0]
@@ -110,6 +88,6 @@ ax.imshow(image)
 ax = axes[1]
 ax.imshow(da_depth_map, cmap="inferno")
 ax = axes[2]
-corrected_depth_map = depthanything_to_meters(da_depth_map)
+corrected_depth_map = depth_estimator.to_meters(da_depth_map)
 ax.imshow(corrected_depth_map, cmap="inferno")
 plt.show()
