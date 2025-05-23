@@ -28,7 +28,8 @@ class DronePilot(Process):
     >>> dp.shutdown()
 
     """
-    def __init__(self):
+
+    def __init__(self, tello_log_level=logging.ERROR, keepalive_interval=5):
         super().__init__()
         self._action_queue = Queue()
         self._response_out, self._response_in = Pipe(duplex=False)
@@ -37,6 +38,8 @@ class DronePilot(Process):
         self._frame_read = None
         self._photo_counter = 0
         self._last_keepalive = datetime.now()
+        self._keepalive_interval = keepalive_interval
+        self._tello_log_level = tello_log_level
 
     # ----- Client API -----
 
@@ -51,6 +54,9 @@ class DronePilot(Process):
 
     def get_height(self):
         return self.call(GetHeight()) / 100
+
+    def get_yaw(self):
+        return self.call(GetYaw())
 
     def move_left(self, distance_m=0.20):
         distance = round(distance_m * 100)
@@ -108,6 +114,7 @@ class DronePilot(Process):
 
     def run(self):
         self._tello = Tello()
+        self._tello.LOGGER.setLevel(self._tello_log_level)
         self._tello.connect(wait_for_state=True)
         self._tello.streamon()
         self._frame_read = self._tello.get_frame_read(with_queue=True, max_queue_len=1)
@@ -118,15 +125,21 @@ class DronePilot(Process):
                 log.info(f"Got action: {action.__class__.__name__}")
                 response = action.act(self, self._tello)
                 self._response_in.send(response)
+
+                self._last_keepalive = datetime.now()
                 time.sleep(self._tello.TIME_BTW_COMMANDS)
             except queue.Empty:
-                # no command, so send a query to keep the drone from landing
-                now = datetime.now()
-                if now - self._last_keepalive >= timedelta(seconds=10):
-                    self._tello.query_battery()
-                    self._last_keepalive = now
+                pass
             except TelloException as e:
                 log.error(f"Exception: {e}")
+
+            # Send a query in case we haven't processed a message during this loop
+            now = datetime.now()
+            if now - self._last_keepalive >= timedelta(
+                seconds=self._keepalive_interval
+            ):
+                self._tello.send_read_command("battery?")
+                self._last_keepalive = now
 
 
 class DroneCommand(Protocol):
@@ -151,13 +164,17 @@ class GetHeight(DroneCommand):
     def act(self, _pilot, tello):
         return tello.get_height()
 
+class GetYaw(DroneCommand):
+    def act(self, _pilot, tello):
+        return tello.get_yaw()
+
 
 class MoveBase(DroneCommand):
     """Base for move commands.
 
     Handles error checking during construction."""
     def __init__(self, distance):
-        if not 20 < distance < 500:
+        if not 20 <= distance <= 500:
             raise ValueError("Tello drone cannot move less than 20 cm or "
                              "more than 500 cm in a single move command.")
 
