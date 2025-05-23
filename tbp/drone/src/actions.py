@@ -19,6 +19,11 @@ __all__ = [
     "MoveRight",
     "MoveUp",
     "MoveDown",
+    "LookLeft",
+    "LookRight",
+    "LookUp",
+    "LookDown",
+    "NextImage",
 ]
 
 
@@ -30,15 +35,16 @@ class DroneActionSpace(tuple, ActionSpace):
         return None
 
     def sample(self):
-        return self.rng.choice(self)
+        raise NotImplementedError
 
 class DroneAction(Action):
-    def __init__(self):
-        super().__init__(agent_id="agent_id_0")
+    """Base class for all drone actions. Hard-codes agent_id to "agent_id_0"."""
+
+    agent_id: str = "agent_id_0"
 
     @classmethod
     def sample(cls, agent_id: str, sampler: "ActionSampler") -> None:
-        return None
+        raise NotImplementedError
 
 
 class TakeOff(DroneAction):
@@ -140,3 +146,47 @@ class SetHeight(DroneAction):
 
     def act(self, actuator: Actuator):
         actuator.actuate_set_height(self)
+
+
+class LookLeft(DroneAction):
+    def __init__(self, angle: Number):
+        super().__init__()
+        self.angle = angle
+
+    def act(self, actuator: Actuator):
+        actuator.actuate_look_left(self)
+
+
+class LookRight(DroneAction):
+    def __init__(self, angle: Number):
+        super().__init__()
+        self.angle = angle
+
+    def act(self, actuator: Actuator):
+        actuator.actuate_look_right(self)
+
+
+class LookUp(DroneAction):
+    def __init__(self, angle: Number):
+        super().__init__()
+        self.angle = angle
+
+    def act(self, actuator: Actuator):
+        actuator.actuate_look_up(self)
+
+
+class LookDown(DroneAction):
+    def __init__(self, angle: Number):
+        super().__init__()
+        self.angle = angle
+
+    def act(self, actuator: Actuator):
+        actuator.actuate_look_down(self)
+
+
+class NextImage(DroneAction):
+    def __init__(self):
+        super().__init__()
+
+    def act(self, actuator: Actuator):
+        actuator.actuate_next_image(self)
