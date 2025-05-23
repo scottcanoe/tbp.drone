@@ -38,3 +38,4 @@ dependencies:
     - matplotlib
     - torch>=2.0.0
     - torchvision
+    - plotly  # For interactive 3D visualizations

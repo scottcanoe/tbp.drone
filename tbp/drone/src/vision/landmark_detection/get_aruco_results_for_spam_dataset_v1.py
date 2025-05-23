@@ -10,7 +10,7 @@ def process_dataset():
     
     # Setup paths
     imgs_dir = os.path.expanduser("~/tbp/tbp.drone/imgs")
-    dataset_dir = os.path.join(imgs_dir, "spam_dataset_v1")
+    dataset_dir = os.path.join(imgs_dir, "spam_dataset_v2")
     output_dir = os.path.join(dataset_dir, "aruco_results")
     
     # Create output directory if it doesn't exist

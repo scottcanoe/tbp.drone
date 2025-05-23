@@ -1,10 +1,13 @@
 import cv2
-import torch
 import numpy as np
 from pathlib import Path
 import sys
+import json
 from typing import Union, Tuple, Optional, List
 import numpy.typing as npt
+import open3d as o3d
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 # Add parent directory to Python path for imports to work with direct execution
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
@@ -18,11 +21,11 @@ class DroneDepthTo3DLocations:
     """Transform RGB image into 3D point cloud with semantic labels.
     
     This class takes an RGB image and transforms it into a 3D point cloud where each point
-    has both spatial coordinates (x, y, z) and a semantic label. It uses DepthAnything V2
-    for depth estimation and SAM for object segmentation.
+    has both spatial coordinates (x, y, z) and color information. It uses DepthAnything V2
+    for depth estimation and SAM with bbox guidance for object segmentation.
     
-    The output is a numpy array with shape (N, 4) where N is the number of points and
-    each point has format [x, y, z, semantic_id].
+    The output is a numpy array with shape (N, 6) where N is the number of points and
+    each point has format [x, y, z, r, g, b].
     
     Attributes:
         resolution: Camera resolution (H, W)
@@ -64,63 +67,57 @@ class DroneDepthTo3DLocations:
         self.get_all_points = get_all_points
         self.max_depth = max_depth
         
-        # Initialize depth and segmentation models
+        # Initialize models
         self.depth_estimator = DepthEstimator(model_path=depth_model_path)
         self.object_segmenter = ObjectSegmenter(model_path=sam_model_path)
-        # Initialize ArUco detector
         self.aruco_detector = ArucoDetector(marker_size=aruco_marker_size)
 
     def __call__(
         self,
         image: Union[str, npt.NDArray[np.uint8]],
-        input_points: Optional[List[Tuple[float, float]]] = None,
-        input_labels: Optional[List[int]] = None,
+        bbox_annotation_path: Optional[str] = None,
         marker_world_position: Optional[List[float]] = None,
         marker_world_orientation: Optional[List[float]] = None,
     ) -> npt.NDArray[np.float32]:
-        """Convert depth image to 3D point cloud and project to world coordinates if ArUco marker is detected.
-        
-        Args:
-            image: Input RGB image path or numpy array
-            input_points: List of (x,y) coordinates to segment
-            input_labels: List of labels for input_points (1=foreground, 0=background)
-            marker_world_position: [x, y, z] world position of the marker's center (default [0,0,0])
-            marker_world_orientation: Optional [rx, ry, rz] world orientation of marker
-            
-        Returns:
-            Nx4 array of 3D points and semantic labels, in world coordinates if marker detected, else camera coordinates
-        """
+        """Convert depth image to 3D point cloud using bbox-guided SAM segmentation."""
         # Get depth map and RGB image
         depth_map, rgb_image_from_estimator = self.depth_estimator.estimate_depth(image)
         
-        # Get segmentation mask
-        if input_points is None or input_labels is None:
-            # Default to center point if no points provided
-            h_rgb, w_rgb = rgb_image_from_estimator.shape[:2]
-            input_points = [(w_rgb/2, h_rgb/2)]
-            input_labels = [1]  # 1 indicates foreground
+        # Get segmentation mask using bbox as input to SAM
+        if bbox_annotation_path and Path(bbox_annotation_path).exists():
+            with open(bbox_annotation_path, 'r') as f:
+                annotations = json.load(f)
             
-        mask, _ = self.object_segmenter.segment_image(
-            rgb_image_from_estimator,
-            input_points=input_points,
-            input_labels=input_labels
-        )
+            if 'spam_can' in annotations:
+                # Convert bbox to SAM input format
+                x1, y1, x2, y2 = annotations['spam_can']
+                bbox_input = [[x1, y1, x2, y2]]  # SAM expects a list of boxes
+                
+                # Get SAM segmentation using bbox
+                mask, _ = self.object_segmenter.segment_image(
+                    rgb_image_from_estimator,
+                    input_boxes=bbox_input  # Pass bbox to SAM
+                )
+            else:
+                mask = np.ones_like(depth_map, dtype=bool)
+        else:
+            # If no annotation, use entire image
+            mask = np.ones_like(depth_map, dtype=bool)
         
         # Create modified depth map where background has max depth
         modified_depth = depth_map.copy()
         modified_depth[~mask] = self.max_depth
         
-        # Prepare RGB image for color sampling (will be resized if necessary)
+        # Prepare RGB image for color sampling
         rgb_image_for_colors = rgb_image_from_estimator
 
         # Resize depth, mask, and rgb_image to match target resolution if needed
         current_depth_h, current_depth_w = modified_depth.shape
         if (current_depth_h, current_depth_w) != self.resolution:
             modified_depth = cv2.resize(modified_depth, (self.resolution[1], self.resolution[0]))
-            # Resize mask from its original dimensions (tied to rgb_image_from_estimator)
             mask = cv2.resize(mask.astype(np.float32), (self.resolution[1], self.resolution[0])) > 0.5
 
-        # Resize rgb_image_for_colors if its original dimensions differ from target resolution
+        # Resize rgb_image_for_colors if needed
         orig_rgb_h, orig_rgb_w = rgb_image_from_estimator.shape[:2]
         if (orig_rgb_h, orig_rgb_w) != self.resolution:
             rgb_image_for_colors = cv2.resize(rgb_image_from_estimator, (self.resolution[1], self.resolution[0]))
@@ -130,13 +127,6 @@ class DroneDepthTo3DLocations:
             np.arange(self.resolution[1]),  # x-coordinates
             np.arange(self.resolution[0])   # y-coordinates
         )
-        # Save modified depth map with colorbar 
-        depth_norm = (255 * (modified_depth - modified_depth.min()) / (modified_depth.ptp() + 1e-8)).astype(np.uint8)
-        import matplotlib.pyplot as plt
-        plt.imshow(depth_norm)
-        plt.colorbar()
-        plt.savefig(f"depthmap_spam_modified.png")
-        plt.close()
         
         # Reshape depth and coordinates
         depth = modified_depth.reshape(-1)
@@ -153,7 +143,6 @@ class DroneDepthTo3DLocations:
         xyz = np.stack((x, y, z), axis=1)  # shape: (N, 3)
         
         # Prepare colors (normalized and in RGB order)
-        # rgb_image_for_colors is already at self.resolution
         colors_normalized_rgb = cv2.cvtColor(rgb_image_for_colors, cv2.COLOR_BGR2RGB) / 255.0
         colors_flat = colors_normalized_rgb.reshape(-1, 3) # shape: (N, 3)
 
@@ -161,26 +150,26 @@ class DroneDepthTo3DLocations:
         xyz_colors = np.concatenate([xyz, colors_flat], axis=1) # shape: (N, 6)
         
         # Filter points based on get_all_points flag
-        object_mask_flat = mask.reshape(-1) # mask is already at self.resolution
+        object_mask_flat = mask.reshape(-1)
         if self.get_all_points:
             points_3d = xyz_colors
         else:
             points_3d = xyz_colors[object_mask_flat]
         
         # --- ArUco marker detection and world projection ---
-        # Default marker world position if not provided
         if marker_world_position is None:
             marker_world_position = [0.0, 0.0, 0.0]
+            
         # Detect ArUco markers in the RGB image
         corners, ids, rejected = self.aruco_detector.detect(rgb_image_from_estimator, output_dir=".")
         if ids is not None and len(ids) > 0:
             # Use the first detected marker for pose estimation
-            # Consider passing self.camera_matrix if aruco_detector requires it
             camera_position, camera_rotation = self.aruco_detector.get_camera_pose(
                 corners[0], marker_world_position, marker_world_orientation
             )
         else:
             camera_position, camera_rotation = None, None
+            
         # Transform points to world coordinates if pose is available
         if camera_position is not None and camera_rotation is not None:
             xyz_to_transform = points_3d[:, :3]
@@ -192,168 +181,230 @@ class DroneDepthTo3DLocations:
         else:
             return points_3d
 
-def main():
-    """Example usage showing visualization of the 3D point cloud."""
+def process_spam_dataset_v2():
+    """Process all PNG images in the spam_dataset_v2 directory and generate point clouds.
+    
+    This function:
+    1. Finds all PNG files in the spam_dataset_v2 directory
+    2. For each image, looks for corresponding bbox annotation
+    3. Generates and saves point cloud data and visualization
+    4. Creates individual scatter plots and a combined visualization
+    """
     # Initialize processor
-    processor = DroneDepthTo3DLocations()
+    processor = DroneDepthTo3DLocations(get_all_points=False)  # Only get spam can points
     
-    # Process example image with center point prompt
-    object_name = "spam"
-    image_path = str(Path(f"~/tbp/tbp.drone/imgs/{object_name}.png").expanduser())
+    # Setup paths
+    base_dir = Path("~/tbp/tbp.drone").expanduser()
+    dataset_dir = base_dir / "imgs" / "spam_dataset_v2"
+    bbox_dir = dataset_dir / "bbox_annotations"
+    point_clouds_dir = dataset_dir / "point_clouds"
     
-    # Load image to get dimensions
-    image = cv2.imread(image_path)
-    h, w = image.shape[:2] # (720, 960)
+    # Create point clouds directory if it doesn't exist
+    point_clouds_dir.mkdir(exist_ok=True)
     
-    # Create point prompts for better segmentation
-    input_points = np.array([
-        [w/2, h/2],      # Center
-        [w/2, h/2-50],   # Top
-        [w/2, h/2+50],   # Bottom
-        [w/2-50, h/2],   # Left
-        [w/2+50, h/2]    # Right
-    ])
-    input_labels = np.array([1, 1, 1, 1, 1])  # All points are foreground
-
-    # --- Save depth map and segmentation mask ---
-    # Get depth map and RGB image
-    depth_map, rgb_image = processor.depth_estimator.estimate_depth(image_path)
-    # Get segmentation mask
-    mask, _ = processor.object_segmenter.segment_image(
-        rgb_image,
-        input_points=input_points.tolist(),
-        input_labels=input_labels.tolist()
-    )
-    # Save depth map
-    np.save(f"depthmap_{object_name}.npy", depth_map)
-    # Normalize for PNG
-    depth_norm = (255 * (depth_map - depth_map.min()) / (depth_map.ptp() + 1e-8)).astype(np.uint8)
-    cv2.imwrite(f"depthmap_{object_name}.png", depth_norm)
-    # Save mask
-    np.save(f"mask_{object_name}.npy", mask)
-    mask_img = (mask * 255).astype(np.uint8)
-    cv2.imwrite(f"mask_{object_name}.png", mask_img)
-
-    # Get 3D point cloud
-    points_3d = processor(
-        image_path,
-        input_points=input_points.tolist(),
-        input_labels=input_labels.tolist()
-    ) # shape: (N, 6)
+    # Get all PNG files in the dataset directory
+    png_files = list(dataset_dir.glob("*.png"))
+    print(f"Found {len(png_files)} PNG files in {dataset_dir}")
     
-    # Filter points to keep only meaningful ones
-    # Remove points that are too far to the sides (x-axis)
-    points_3d = points_3d[np.abs(points_3d[:, 0]) < 0.2]
-    # Remove points that are too far in depth (y-axis)
-    points_3d = points_3d[points_3d[:, 1] < 0.5]
-    # Remove points that are too high or low (z-axis)
-    points_3d = points_3d[np.abs(points_3d[:, 2]) < 0.2]
+    # Store all points for combined visualization
+    all_points = []
     
-    # Get all coordinates for 3D plotting
-    x = points_3d[:, 0]  # right
-    y = points_3d[:, 1]  # forward
-    z = -points_3d[:, 2] # up (negative because camera coordinates are flipped)
-    
-    # Prepare colors for Plotly (list of 'rgb(r,g,b)' strings)
-    point_colors_plotly = [f'rgb({int(r*255)},{int(g*255)},{int(b*255)})' for r,g,b in points_3d[:, 3:6]]
-
-    # --- Plotly interactive plot ---
-    try:
-        import plotly.graph_objs as go
-        import plotly.io as pio
-        plotly_available = True
-    except ImportError:
-        plotly_available = False
-    
-    if plotly_available:
-        # Create 3D scatter plot
-        fig_plotly = go.Figure(data=[
-            # Point cloud
-            go.Scatter3d(
-                x=x,
-                y=y,
-                z=z,
-                mode='markers',
-                marker=dict(
-                    size=2,
-                    color=point_colors_plotly,
-                    opacity=0.6
-                ),
-                name='Point Cloud'
-            ),
-            # Origin marker
-            go.Scatter3d(
-                x=[0],
-                y=[0],
-                z=[0],
-                mode='markers',
-                marker=dict(
-                    size=10,
-                    color='red',
-                    symbol='circle'
-                ),
-                name='Origin'
+    # Process each image
+    for img_path in png_files:
+        print(f"Processing {img_path.name}")
+        
+        # Get corresponding bbox annotation path
+        bbox_path = bbox_dir / f"{img_path.stem}_annotations.json"
+        
+        try:
+            # Get 3D point cloud
+            points_3d = processor(
+                str(img_path),
+                bbox_annotation_path=str(bbox_path) if bbox_path.exists() else None
             )
-        ])
-        fig_plotly.update_layout(
-            scene=dict(
-                xaxis_title='X (right +)',
-                yaxis_title='Y (forward +)',
-                zaxis_title='Z (up +)',
-                aspectmode='data'
-            ),
-            title='3D Point Cloud with RGB Colors (Interactive)',
-            width=800,
-            height=800,
-            showlegend=True
+            
+            # Store points for combined visualization
+            all_points.append(points_3d)
+            
+            # Save point cloud data
+            output_npy = point_clouds_dir / f"points_3d_{img_path.stem}.npy"
+            np.save(str(output_npy), points_3d)
+            print(f"Saved point cloud data to {output_npy}")
+            
+            # Get coordinates for plotting
+            x = points_3d[:, 0]  # right
+            y = points_3d[:, 1]  # forward
+            z = points_3d[:, 2]  # up
+            colors = points_3d[:, 3:6]  # RGB colors
+            
+            # Create matplotlib 3D scatter plot
+            fig = plt.figure(figsize=(10, 10))
+            ax = fig.add_subplot(111, projection='3d')
+            scatter = ax.scatter(x, y, z, c=colors, s=1)
+            ax.set_xlabel('X (right +)')
+            ax.set_ylabel('Y (forward +)')
+            ax.set_zlabel('Z (up +)')
+            ax.set_title(f'3D Point Cloud: {img_path.stem}')
+            
+            # Save matplotlib plot
+            output_scatter = point_clouds_dir / f"scatter3d_{img_path.stem}.png"
+            plt.savefig(output_scatter, dpi=300, bbox_inches='tight')
+            plt.close()
+            print(f"Saved scatter plot to {output_scatter}")
+            
+            # Create and save Plotly visualization
+            try:
+                import plotly.graph_objs as go
+                import plotly.io as pio
+                
+                # Prepare colors for Plotly
+                point_colors_plotly = [f'rgb({int(r*255)},{int(g*255)},{int(b*255)})' 
+                                     for r,g,b in colors]
+                
+                # Create 3D scatter plot
+                fig_plotly = go.Figure(data=[
+                    # Point cloud
+                    go.Scatter3d(
+                        x=x,
+                        y=y,
+                        z=z,
+                        mode='markers',
+                        marker=dict(
+                            size=2,
+                            color=point_colors_plotly,
+                            opacity=0.6
+                        ),
+                        name='Point Cloud'
+                    ),
+                    # Origin marker
+                    go.Scatter3d(
+                        x=[0],
+                        y=[0],
+                        z=[0],
+                        mode='markers',
+                        marker=dict(
+                            size=10,
+                            color='red',
+                            symbol='circle'
+                        ),
+                        name='Origin'
+                    )
+                ])
+                
+                fig_plotly.update_layout(
+                    scene=dict(
+                        xaxis_title='X (right +)',
+                        yaxis_title='Y (forward +)',
+                        zaxis_title='Z (up +)',
+                        aspectmode='data'
+                    ),
+                    title=f'3D Point Cloud: {img_path.stem}',
+                    width=800,
+                    height=800,
+                    showlegend=True
+                )
+                
+                # Save interactive plot
+                output_html = point_clouds_dir / f"pointcloud_{img_path.stem}_3d.html"
+                pio.write_html(fig_plotly, file=str(output_html), auto_open=False)
+                print(f"Saved interactive plot to {output_html}")
+                
+            except ImportError:
+                print("Plotly is not installed. Skipping interactive plot.")
+                
+        except Exception as e:
+            print(f"Error processing {img_path.name}: {str(e)}")
+            continue
+    
+    # Create combined visualization of all points
+    if all_points:
+        combined_points = np.concatenate(all_points, axis=0)
+        
+        # Save combined point cloud data
+        np.save(str(point_clouds_dir / "points_3d_combined.npy"), combined_points)
+        
+        # Create matplotlib combined scatter plot
+        fig = plt.figure(figsize=(12, 12))
+        ax = fig.add_subplot(111, projection='3d')
+        scatter = ax.scatter(
+            combined_points[:, 0],
+            combined_points[:, 1],
+            combined_points[:, 2],
+            c=combined_points[:, 3:6],
+            s=1
         )
-        pio.write_html(fig_plotly, file=f"pointcloud_{object_name}_3d.html", auto_open=False)
-        print(f"Plotly interactive 3D plot saved as pointcloud_{object_name}_3d.html")
-    else:
-        print("Plotly is not installed. Skipping interactive plot.")
-
-    # Save scatter as npy
-    np.save(f"./points_3d_{object_name}.npy", points_3d)
-
-    # --- Matplotlib 3D static plot ---
-    import matplotlib.pyplot as plt
-    fig = plt.figure(figsize=(10, 10))
-    ax = fig.add_subplot(111, projection='3d')
-    
-    # Plot point cloud
-    scatter = ax.scatter(
-        x, y, z,
-        c=points_3d[:, 3:6],  # RGB colors
-        alpha=0.6,
-        s=1,
-        label='Point Cloud'
-    )
-    
-    # Plot origin
-    ax.scatter(
-        [0], [0], [0],
-        color='red',
-        s=100,  # Larger size for visibility
-        label='Origin'
-    )
-    
-    ax.set_xlabel('X (right +)')
-    ax.set_ylabel('Y (forward +)')
-    ax.set_zlabel('Z (up +)')
-    ax.set_title('3D Point Cloud with RGB Colors')
-    ax.legend()
-    
-    # Set equal aspect ratio
-    max_range = np.array([x.max()-x.min(), y.max()-y.min(), z.max()-z.min()]).max() / 2.0
-    mid_x = (x.max()+x.min()) * 0.5
-    mid_y = (y.max()+y.min()) * 0.5
-    mid_z = (z.max()+z.min()) * 0.5
-    ax.set_xlim(mid_x - max_range, mid_x + max_range)
-    ax.set_ylim(mid_y - max_range, mid_y + max_range)
-    ax.set_zlim(mid_z - max_range, mid_z + max_range)
-    
-    plt.savefig(f"pointcloud_{object_name}_3d.png", dpi=300, bbox_inches='tight')
-    plt.close()
+        ax.set_xlabel('X (right +)')
+        ax.set_ylabel('Y (forward +)')
+        ax.set_zlabel('Z (up +)')
+        ax.set_title('Combined 3D Point Cloud')
+        
+        # Save combined scatter plot
+        plt.savefig(str(point_clouds_dir / "scatter3d_combined.png"), dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # Create combined Plotly visualization
+        try:
+            import plotly.graph_objs as go
+            import plotly.io as pio
+            
+            # Prepare colors for Plotly
+            combined_colors_plotly = [
+                f'rgb({int(r*255)},{int(g*255)},{int(b*255)})' 
+                for r,g,b in combined_points[:, 3:6]
+            ]
+            
+            # Create combined 3D scatter plot
+            fig_plotly = go.Figure(data=[
+                # Point cloud
+                go.Scatter3d(
+                    x=combined_points[:, 0],
+                    y=combined_points[:, 1],
+                    z=combined_points[:, 2],
+                    mode='markers',
+                    marker=dict(
+                        size=2,
+                        color=combined_colors_plotly,
+                        opacity=0.6
+                    ),
+                    name='Combined Point Cloud'
+                ),
+                # Origin marker
+                go.Scatter3d(
+                    x=[0],
+                    y=[0],
+                    z=[0],
+                    mode='markers',
+                    marker=dict(
+                        size=10,
+                        color='red',
+                        symbol='circle'
+                    ),
+                    name='Origin'
+                )
+            ])
+            
+            fig_plotly.update_layout(
+                scene=dict(
+                    xaxis_title='X (right +)',
+                    yaxis_title='Y (forward +)',
+                    zaxis_title='Z (up +)',
+                    aspectmode='data'
+                ),
+                title='Combined 3D Point Cloud',
+                width=1000,
+                height=1000,
+                showlegend=True
+            )
+            
+            # Save combined interactive plot
+            pio.write_html(
+                fig_plotly,
+                file=str(point_clouds_dir / "pointcloud_combined_3d.html"),
+                auto_open=False
+            )
+            
+        except ImportError:
+            print("Plotly is not installed. Skipping combined interactive plot.")
 
 if __name__ == "__main__":
-    main() 
+    process_spam_dataset_v2() 
