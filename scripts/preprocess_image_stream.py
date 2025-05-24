@@ -1,13 +1,9 @@
 import datetime
 import json
-import logging
 import os
 import pprint as pp
 import shutil
 import subprocess as sp
-import threading
-import time
-import warnings
 from numbers import Number
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
@@ -18,32 +14,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 import quaternion as qt
-from djitellopy import Tello
+from matplotlib.animation import FuncAnimation, PillowWriter
 from scipy.spatial.transform import Rotation
 
-from tbp.drone.src.actions import (
-    Action,
-    Land,
-    LookDown,
-    LookLeft,
-    LookRight,
-    LookUp,
-    MoveBackward,
-    MoveDown,
-    MoveForward,
-    MoveLeft,
-    MoveRight,
-    MoveUp,
-    NextImage,
-    SetHeight,
-    SetYaw,
-    TakeOff,
-    TurnLeft,
-    TurnRight,
-)
-from tbp.drone.src.dataloader import DroneDataLoader
-from tbp.drone.src.drone_pilot import DronePilot
-from tbp.drone.src.environment import DroneEnvironment, DroneImageEnvironment
+from tbp.drone.src.environment import DroneImageEnvironment
 from tbp.drone.src.spatial import (
     as_signed_angle,
     as_unsigned_angle,
@@ -52,303 +26,225 @@ from tbp.drone.src.spatial import (
     quaternion_to_rotation,
     reorder_quat_array,
 )
+from tbp.drone.src.utils import as_rgba
 from tbp.drone.src.vision.depth_processing.depth_estimator import DepthEstimator
-from tbp.drone.src.vision.depth_processing.object_segmenter import ObjectSegmenter
 
-DATA_PATH = Path.home() / "tbp/data/worldimages/drone/potted_meat_can_v1"
-
-
-OCLOCK_TO_STEPISODE = {
-    6: 0,
-    5: 1,
-    4: 2,
-    3: 3,
-    2: 4,
-    1: 5,
-    12: 6,
-    11: 7,
-    10: 8,
-    9: 9,
-    8: 10,
-    7: 11,
-}
+DATA_PATH = Path.home() / "tbp/data/worldimages/drone/potted_meat_can_v4"
 
 
-def add_images(
-    src_dir: os.PathLike,
-    dst_dir: os.PathLike,
-) -> None:
-    monty_data_dir = Path(os.environ.get("MONTY_DATA", "~/tbp/data/")).expanduser()
-    drone_data_dir = monty_data_dir / "worldimages/drone"
-    src_dir = drone_data_dir / src_dir
-    dst_dir = drone_data_dir / dst_dir
+class StepisodeData:
+    def __init__(self, data_dir: os.PathLike):
+        self.data_dir = Path(data_dir).expanduser()
 
-    for oclock, stepisode in OCLOCK_TO_STEPISODE.items():
-        src_image_path = src_dir / f"spam_{oclock}oclock.png"
-        src_state_path = src_dir / f"spam_{oclock}oclock_state.txt"
+    @property
+    def n_stepisodes(self) -> int:
+        return len(self.get_dirs())
 
-        dst_subdir = dst_dir / f"{stepisode}"
-        dst_subdir.mkdir(parents=True, exist_ok=True)
-        dst_image_path = dst_subdir / "image.png"
-        dst_state_path = dst_subdir / "drone_state.json"
+    def get_dirs(self) -> List[Path]:
+        paths = list(self.data_dir.glob("*"))
+        paths = [p for p in paths if p.is_dir() and p.name.isdigit()]
+        steps = sorted([int(p.name) for p in paths])
+        if not np.array_equal(steps, np.arange(len(steps))):
+            raise ValueError(f"Stepisodes are not consecutive: {steps}")
+        return [self.data_dir / f"{i}" for i in steps]
 
-        shutil.copy(src_image_path, dst_image_path)
-        shutil.copy(src_state_path, dst_state_path)
+    def iterdirs(self) -> Iterable[Path]:
+        for p in self.get_dirs():
+            yield p
 
+    def add_depth_maps(self):
+        depth_estimator = DepthEstimator()
+        for i, stepisode_dir in enumerate(self.iterdirs()):
+            image = imageio.imread(stepisode_dir / "image.png")
+            depth = depth_estimator(image)
+            np.save(stepisode_dir / "depth.npy", depth)
 
-def compute_agent_states():
-    n_stepisodes = 12
-    radius = 0.22
-    height = 0.05
+    def add_rgba(self):
+        for i, stepisode_dir in enumerate(self.iterdirs()):
+            rgb = imageio.imread(stepisode_dir / "image.png")
+            rgba = as_rgba(rgb)
+            np.save(stepisode_dir / "rgba.npy", rgba)
 
-    stepisodes = np.arange(n_stepisodes)
-    # For positions
-    location_radians_delta = -2 * np.pi / n_stepisodes
-    rotation_radians = np.mod(
-        np.pi / 2 + location_radians_delta * stepisodes, 2 * np.pi
-    )
+    def add_agent_states(self):
+        positions, rotations = self.compute_agent_states()
+        for i, stepisode_dir in enumerate(self.iterdirs()):
+            agent_state = {
+                "position": positions[i].tolist(),
+                "rotation": qt.as_float_array(rotations[i]).tolist(),
+            }
+            with open(stepisode_dir / "agent_state.json", "w") as f:
+                json.dump(agent_state, f)
 
-    # For rotations
-    rotation_yaw_delta = 360 / n_stepisodes
-    rotation_yaws = rotation_yaw_delta * np.arange(12)
+    def compute_agent_states(self, distance: float = 0.25, height: float = 0.05):
+        n_stepisodes = self.n_stepisodes
+        stepisodes = np.arange(n_stepisodes)
+        # For positions
+        location_radians_delta = 2 * np.pi / n_stepisodes
+        rotation_radians = np.mod(
+            np.pi / 2 + location_radians_delta * stepisodes, 2 * np.pi
+        )
 
-    positions = []
-    rotations = []
-    positions_x = -radius * np.cos(rotation_radians)
-    positions_z = radius * np.sin(rotation_radians)
-    for i in range(n_stepisodes):
-        pos = np.array([positions_x[i], height, positions_z[i]])
-        positions.append(pos)
-        quat = pitch_roll_yaw_to_quaternion(0, 0, rotation_yaws[i])
-        rotations.append(quat)
+        # For rotations
+        rotation_yaw_delta = 360 / n_stepisodes
+        rotation_yaws = rotation_yaw_delta * np.arange(12)
 
-    return positions, rotations
+        positions = []
+        rotations = []
+        positions_x = -distance * np.cos(rotation_radians)
+        positions_z = distance * np.sin(rotation_radians)
+        for i in range(n_stepisodes):
+            pos = np.array([positions_x[i], height, positions_z[i]])
+            positions.append(pos)
+            quat = pitch_roll_yaw_to_quaternion(0, 0, rotation_yaws[i])
+            rotations.append(quat)
 
+        return positions, rotations
 
-def plot_agent_states(positions, rotations):
-    for i, pos in enumerate(positions):
-        x, y, z = 100 * pos
-        print(f"Position {i}: ({x:.1f}, {y:.1f}, {z:.1f}) cm")
+    def visualize_agent_states(
+        self, save_path: Optional[os.PathLike] = None, from_file: bool = True
+    ):
+        def update(frame):
+            ax.cla()  # Clear previous frame (optional if you're redrawing completely)
 
-    fig = plt.figure(figsize=(5, 5))
-    ax = fig.add_subplot(1, 1, 1)
-    ax.invert_xaxis()
-    positions_x = np.array([p[0] for p in positions])
-    positions_z = np.array([p[2] for p in positions])
-    ax.plot(positions_x, positions_z, "rx")
-    ax.set_aspect("equal")
-    ax.set_xlabel("X")
-    ax.set_ylabel("Z")
-    lim = 0.3
-    ax.set_xlim(lim, -lim)
-    ax.set_ylim(-lim, lim)
-    arrow_length = 0.05
+            """
+            Draw origin
+            """
+            ax.scatter(0, 0, 0, color="k", s=50)
+            ax.quiver(0, 0, 0, 1, 0, 0, color="r", label="X", length=0.1)
+            ax.quiver(0, 0, 0, 0, 1, 0, color="g", label="Y", length=0.1)
+            ax.quiver(0, 0, 0, 0, 0, 1, color="b", label="Z", length=0.1)
 
-    for i, pos in enumerate(positions):
-        x, y, z = pos
-        ax.annotate(f"{i}", (x, z), xytext=(5, 5), textcoords="offset points")
-        quat = rotations[i]
-        rot = quaternion_to_rotation(quat)
-        mat = rot.as_matrix()
+            """
+            Draw agent positions
+            """
+            pos = positions[frame]
+            rot = quaternion_to_rotation(rotations[frame])
 
-        origin = np.array([pos[0], pos[2]])
-        x_component = np.array([mat[0, 0], mat[0, 2]])
-        y_component = np.array([mat[2, 0], mat[2, 2]])
+            mat = rot.as_matrix()
+            colors = ["red", "green", "blue"]
+            for i in range(3):
+                ax.quiver(
+                    *pos,
+                    *mat[:, i],
+                    color=colors[i],
+                    length=0.1,
+                )
+            ax.scatter(pos[0], pos[1], pos[2], color="k", s=10)
 
-        x_end = origin + x_component * arrow_length
-        y_end = origin + y_component * arrow_length
-        ax.plot([origin[0], x_end[0]], [origin[1], x_end[1]], "r-")
-        ax.plot([origin[0], y_end[0]], [origin[1], y_end[1]], "b-")
+            lim = 0.3
+            ax.set_xlim([-lim, lim])
+            ax.set_ylim([-lim, lim])
+            ax.set_zlim([-lim, lim])
 
-    plt.show()
+            # Adjust camera view: elev = elevation (Y rotation), azim = azimuth (Z rotation)
+            ax.view_init(elev=-42, azim=90)  # orient Z into screen
+            ax.set_xlabel("X")
+            ax.set_ylabel("Y")
+            ax.set_zlabel("Z")
 
+            plt.legend()
 
-def add_agent_positions_and_rotations():
-    positions, rotations = compute_agent_states()
-    for i in range(12):
-        stepisode_dir = DATA_PATH / f"{i}"
-        path = stepisode_dir / "agent_state.json"
-        if path.exists():
-            with open(path, "r") as f:
-                info = json.load(f)
+            # Object image
+            image_ax.cla()
+            image_ax.imshow(images[frame])
+            image_ax.axis("off")
+
+            fig.suptitle(f"Frame {frame}")
+
+            plt.show()
+
+        if from_file:
+            positions, rotations = [], []
+            for stepisode_dir in self.iterdirs():
+                with open(stepisode_dir / "agent_state.json", "r") as f:
+                    agent_state = json.load(f)
+                positions.append(np.array(agent_state["position"]))
+                rotations.append(qt.from_float_array(np.array(agent_state["rotation"])))
         else:
-            info = {}
-        info["agent_position"] = positions[i].tolist()
-        info["agent_rotation"] = qt.as_float_array(rotations[i]).tolist()
-        with open(path, "w") as f:
-            json.dump(info, f)
+            positions, rotations = StepisodeData(DATA_PATH).compute_agent_states()
+        images = []
+        for i in range(len(positions)):
+            image = imageio.imread(DATA_PATH / f"{i}" / "image.png")
+            images.append(image)
 
+        fig = plt.figure(figsize=(10, 5))
+        ax = fig.add_subplot(1, 2, 1, projection="3d")
+        image_ax = fig.add_subplot(1, 2, 2)
 
-def add_depth():
-    depth_estimator = DepthEstimator()
-    data_path = Path("/Users/sknudstrup/tbp/data/worldimages/drone/potted_meat_can_v1")
-    for i in range(12):
-        stepisode_dir = data_path / f"{i}"
+        anim = FuncAnimation(fig, update, frames=12, interval=500, repeat=True)
+        if save_path is not None:
+            anim.save(save_path, writer=PillowWriter(fps=1))
+        else:
+            plt.show()
+
+    def add_object_masks(self, stepisode: int, depth_range: Tuple[float, float]):
+        for i, subdir in enumerate(self.iterdirs()):
+            object_mask, fig = self.make_object_mask(
+                i, show=True, depth_range=depth_range
+            )
+            fig.savefig(subdir / "masks.png")
+            np.save(subdir / "object_mask.npy", object_mask)
+
+    def make_object_mask(
+        self,
+        stepisode: int,
+        show: bool = False,
+        depth_range: Optional[Tuple[float, float]] = None,
+    ):
+        if depth_range is None:
+            depth_range = (-np.inf, np.inf)
+
+        stepisode_dir = self.data_dir / f"{stepisode}"
         image = imageio.imread(stepisode_dir / "image.png")
-        depth, _ = depth_estimator.estimate_depth(image)
-        npy_path = stepisode_dir / "depth.npy"
-        np.save(npy_path, depth)
+        with open(stepisode_dir / "bbox.json", "r") as f:
+            bbox = json.load(f)["object"]
+        depth = np.load(stepisode_dir / "depth.npy")
+
+        in_depth_range = np.ones_like(depth, dtype=bool)
+        in_depth_range[depth < depth_range[0]] = False
+        in_depth_range[depth > depth_range[1]] = False
+        in_bbox = np.zeros_like(depth, dtype=bool)
+        in_bbox[bbox[1] : bbox[3], bbox[0] : bbox[2]] = True
+        object_mask = in_depth_range & in_bbox
+        masked_image = image.copy()
+        masked_image[~object_mask] = (0, 0, 0)
+        if show:
+            fig, axes = plt.subplots(3, 2, figsize=(10, 10))
+            axes[0, 0].imshow(image)
+            axes[0, 0].set_title("Image")
+
+            axes[0, 1].imshow(depth)
+            axes[0, 1].set_title("Depth")
+
+            img = image.copy()
+            img[~in_bbox] = (0, 0, 0)
+            axes[1, 0].imshow(img)
+            axes[1, 0].set_title("bbox masked")
+
+            img = image.copy()
+            img[~in_depth_range] = (0, 0, 0)
+            axes[1, 1].imshow(img)
+            axes[1, 1].set_title("depth masked")
+
+            axes[2, 0].imshow(masked_image)
+            axes[2, 0].set_title("Object Mask")
+
+            ax = axes[2, 1]
+            object_depth = depth[object_mask]
+            ax.hist(object_depth, bins=100)
+            ax.set_title("On-object Depth")
+            ax.set_xlabel("Depth")
+            ax.set_ylabel("Count")
+
+            for ax in axes.flatten()[:-1]:
+                ax.axis("off")
+            fig.suptitle(f"Stepisode {stepisode}: depth_range={depth_range}")
+            plt.show()
+        if show:
+            return object_mask, fig
+        else:
+            return object_mask
 
 
-def add_bbox_annotations():
-    src_dir = Path.home() / "Downloads/bbox_annotations"
-    dst_dir = DATA_PATH
-    for oclock, stepisode in OCLOCK_TO_STEPISODE.items():
-        src_path = src_dir / f"spam_{oclock}oclock_annotations.json"
-        with open(src_path, "r") as f:
-            bboxes_in = json.load(f)
-        keys = list(bboxes_in.keys())
-        keys.remove("aruco")
-        object_key = keys[0]
-        bboxes_out = {
-            "aruco": bboxes_in["aruco"],
-            "object": bboxes_in[object_key],
-        }
-        dst_path = dst_dir / f"{stepisode}/bbox.json"
-        with open(dst_path, "w") as f:
-            json.dump(bboxes_out, f)
+dset = StepisodeData(DATA_PATH)
 
-
-def add_summaries():
-    env = DroneImageEnvironment(data_path="potted_meat_can_v1")
-    for i in range(12):
-        data = env._load_stepisode_data(i)
-        stepisode_dir = env.data_path / f"{i}"
-        image = data["image"]
-        depth = data["depth"]
-        bboxes = data["bbox"]
-
-        fig, axes = plt.subplots(3, 2, figsize=(10, 10))
-
-        ax = axes[0, 0]
-        ax.imshow(image)
-        ax.set_title("Image")
-        ax.axis("off")
-
-        ax = axes[0, 1]
-        depth[depth < env.depth_range[0]] = np.nan
-        depth[depth > env.depth_range[1]] = np.nan
-        im = ax.imshow(depth, cmap="inferno")
-        plt.colorbar(im, label="Depth")
-        ax.axis("off")
-        ax.set_title("Depth")
-
-        ax = axes[1, 0]
-        bbox = bboxes["object"]
-        x1, y1, x2, y2 = bbox
-        img = np.zeros_like(image)
-        img[y1:y2, x1:x2] = image[y1:y2, x1:x2]
-        ax.imshow(img)
-        ax.set_title("Object bbox")
-        ax.axis("off")
-
-        ax = axes[1, 1]
-        bbox = bboxes["aruco"]
-        x1, y1, x2, y2 = bbox
-        img = np.zeros_like(image)
-        img[y1:y2, x1:x2] = image[y1:y2, x1:x2]
-        ax.imshow(img)
-        ax.set_title("Aruco bbox")
-        ax.axis("off")
-
-        ax = axes[2, 0]
-        bbox = bboxes["object"]
-        x1, y1, x2, y2 = bbox
-        is_in_depth_range = ~np.isnan(depth)
-        is_in_object_bbox = np.zeros_like(depth, dtype=bool)
-        is_in_object_bbox[y1:y2, x1:x2] = True
-        is_valid = is_in_depth_range & is_in_object_bbox
-        img = image.copy()
-        img[~is_valid] = (0, 0, 0)
-        ax.imshow(img)
-        ax.axis("off")
-        ax.set_title("Object (depth-clipped + bbox)")
-
-        ax = axes[2, 1]
-        bbox = bboxes["aruco"]
-        x1, y1, x2, y2 = bbox
-        is_in_depth_range = ~np.isnan(depth)
-        is_in_object_bbox = np.zeros_like(depth, dtype=bool)
-        is_in_object_bbox[y1:y2, x1:x2] = True
-        is_valid = is_in_depth_range & is_in_object_bbox
-        img = image.copy()
-        img[~is_valid] = (0, 0, 0)
-        ax.imshow(img)
-        ax.axis("off")
-        ax.set_title("Aruco (depth-clipped + bbox)")
-
-        summary_path = stepisode_dir / "summary.png"
-        fig.savefig(summary_path)
-        plt.show()
-
-
-env = DroneImageEnvironment(data_path="potted_meat_can_v1")
-# positions, rotations = compute_agent_states()
-
-n_stepisodes = 12
-radius = 0.27305
-height = 0.05
-agent_height_rel_ground = 8.73 / 100
-object_height_rel_ground = 3.81 / 100
-height = agent_height_rel_ground - object_height_rel_ground
-
-stepisodes = np.arange(n_stepisodes)
-# For positions
-location_radians_delta = -2 * np.pi / n_stepisodes
-rotation_radians = np.mod(np.pi / 2 + location_radians_delta * stepisodes, 2 * np.pi)
-
-# For rotations
-rotation_yaw_delta = 360 / n_stepisodes
-rotation_yaws = rotation_yaw_delta * np.arange(12)
-
-positions = []
-rotations = []
-positions_x = -radius * np.cos(rotation_radians)
-positions_z = radius * np.sin(rotation_radians)
-for i in range(n_stepisodes):
-    pos = np.array([positions_x[i], height, positions_z[i]])
-    positions.append(pos)
-    quat = pitch_roll_yaw_to_quaternion(0, 0, rotation_yaws[i])
-    rotations.append(quat)
-
-# positions, rotations = [], []
-# for i in range(12):
-#     data = env._load_stepisode_data(i)
-#     agent_state = data["agent_state"]
-#     position = np.array(agent_state["agent_position"])
-#     rotation = qt.from_float_array(np.array(agent_state["agent_rotation"]))
-#     positions.append(position)
-#     rotations.append(rotation)
-
-fig = plt.figure(figsize=(5, 5))
-ax = fig.add_subplot(1, 1, 1)
-ax.invert_xaxis()
-positions_x = np.array([p[0] for p in positions])
-positions_z = np.array([p[2] for p in positions])
-ax.plot(positions_x, positions_z, "rx")
-ax.set_aspect("equal")
-ax.set_xlabel("X")
-ax.set_ylabel("Z")
-lim = 0.3
-ax.set_xlim(lim, -lim)
-ax.set_ylim(-lim, lim)
-arrow_length = 0.05
-
-
-for i, pos in enumerate(positions):
-    x, y, z = pos
-    ax.annotate(f"{i}", (x, z), xytext=(5, 5), textcoords="offset points")
-    quat = rotations[i]
-    rot = quaternion_to_rotation(quat)
-    mat = rot.as_matrix()
-
-    origin = np.array([pos[0], pos[2]])
-    x_component = np.array([mat[0, 0], mat[0, 2]])
-    y_component = np.array([mat[2, 0], mat[2, 2]])
-
-    x_end = origin + x_component * arrow_length
-    y_end = origin + y_component * arrow_length
-    ax.plot([origin[0], x_end[0]], [origin[1], x_end[1]], "r-")
-    ax.plot([origin[0], y_end[0]], [origin[1], y_end[1]], "b-")
-
-plt.show()

@@ -16,34 +16,10 @@ import cv2
 import imageio
 import matplotlib.pyplot as plt
 import numpy as np
-import numpy.typing as npt
 import quaternion as qt
-from djitellopy import Tello
 from scipy.spatial.transform import Rotation
 
-from tbp.drone.src.actions import (
-    Action,
-    Land,
-    LookDown,
-    LookLeft,
-    LookRight,
-    LookUp,
-    MoveBackward,
-    MoveDown,
-    MoveForward,
-    MoveLeft,
-    MoveRight,
-    MoveUp,
-    NextImage,
-    SetHeight,
-    SetYaw,
-    TakeOff,
-    TurnLeft,
-    TurnRight,
-)
-from tbp.drone.src.dataloader import DroneDataLoader
-from tbp.drone.src.drone_pilot import DronePilot
-from tbp.drone.src.environment import DroneEnvironment, DroneImageEnvironment
+from tbp.drone.src.environment import DroneImageEnvironment
 from tbp.drone.src.spatial import (
     as_signed_angle,
     as_unsigned_angle,
@@ -52,10 +28,70 @@ from tbp.drone.src.spatial import (
     quaternion_to_rotation,
     reorder_quat_array,
 )
-from tbp.drone.src.vision.depth_processing.depth_estimator import DepthEstimator
-from tbp.drone.src.vision.depth_processing.object_segmenter import ObjectSegmenter
+from tbp.drone.src.utils import as_rgba
 
-DATA_PATH = Path.home() / "tbp/data/worldimages/drone/potted_meat_can_v1"
+DATA_PATH = Path.home() / "tbp/data/worldimages/drone/potted_meat_can_v4"
+
+
+def axes3d_set_aspect_equal(ax) -> None:
+    """Set equal aspect ratio for 3D axes."""
+    x_limits = ax.get_xlim()
+    y_limits = ax.get_ylim()
+    z_limits = ax.get_zlim()
+
+    # Get the max range
+    x_range = x_limits[1] - x_limits[0]
+    y_range = y_limits[1] - y_limits[0]
+    z_range = z_limits[1] - z_limits[0]
+    half_max_range = max(x_range, y_range, z_range) / 2
+
+    # Find midpoints
+    x_middle = np.mean(x_limits)
+    y_middle = np.mean(y_limits)
+    z_middle = np.mean(z_limits)
+
+    # Set new limits
+    ax.set_xlim([x_middle - half_max_range, x_middle + half_max_range])
+    ax.set_ylim([y_middle - half_max_range, y_middle + half_max_range])
+    ax.set_zlim([z_middle - half_max_range, z_middle + half_max_range])
+
+    # Set aspect ratio.
+    ax.set_box_aspect([1, 1, 1])
+
+
+def draw_origin(ax, length=0.1, **kwargs):
+    """
+    Draw origin
+    """
+    kw = kwargs.copy()
+    kw["color"] = kw.get("color", "k")
+    kw["s"] = kw.get("s", 100)
+
+    ax.scatter(0, 0, 0, **kw)
+    ax.quiver(0, 0, 0, 1, 0, 0, color="r", length=length)
+    ax.quiver(0, 0, 0, 0, 1, 0, color="g", length=length)
+    ax.quiver(0, 0, 0, 0, 0, 1, color="b", length=length)
+
+
+def draw_agent(ax, pos, rot, length=0.1, **kwargs):
+    """
+    Draw agent positions
+    """
+
+    rot = quaternion_to_rotation(rot)
+    mat = rot.as_matrix()
+    colors = ["red", "green", "blue"]
+    for i in range(3):
+        ax.quiver(
+            *pos,
+            *mat[:, i],
+            color=colors[i],
+            length=length,
+        )
+    kw = kwargs.copy()
+    kw["color"] = kw.get("color", "k")
+    kw["s"] = kw.get("s", 10)
+    ax.scatter(pos[0], pos[1], pos[2], **kw)
 
 
 class DroneDepthTo3DLocations:
@@ -121,49 +157,50 @@ class DroneDepthTo3DLocations:
 
         if isinstance(zooms, (int, float)):
             zooms = [zooms] * len(sensor_ids)
+        self.zooms = zooms
 
-        hfov = 90
-        new = False
-        for i, zoom in enumerate(zooms):
-            # Pinhole camera, focal length fx = fy
-            h, w = resolutions[i]
-
-            if new:
-                hvov_x = 70
-                hfov_y = 50
-                # fx =
-                cx = self.cx
-                cy = self.cy
-                fx = fy = focal_length
-                k = np.array(
-                    [
-                        [1.0 / fx, 0.0, cx, 0.0],
-                        [0.0, 1 / fy, cy, 0.0],
-                        [0.0, 0.0, 1.0, 0],
-                        [0.0, 0.0, 0.0, 1.0],
-                    ]
-                )
-            else:
-                fx = fy = np.tan(hfov / 2.0) / zoom
-                fx, fy = 1 / fx, 1 / fy
-                k = np.array(
-                    [
-                        [fx, 0.0, 0.0, 0.0],
-                        [0.0, fy, 0.0, 0.0],
-                        [0.0, 0.0, 1.0, 0],
-                        [0.0, 0.0, 0.0, 1.0],
-                    ]
-                )
-            print(f"fx: {fx}, fy: {fy}, k: \n{k}")
-            # Adjust fy for aspect ratio
+        self.method = self.get_intrinsic_matrix_2
+        for i in range(len(sensor_ids)):
+            h, w = self.resolutions[i]
+            k, inv_k = self.method(i)
             self.h.append(h)
             self.w.append(w)
+            self.inv_k.append(inv_k)
 
-            # Intrinsic matrix, K
-            # Assuming skew is 0 for pinhole camera and center at (0,0)
+    def get_intrinsic_matrix_1(self, sensor_id: 0, hfov=120):
+        h, w = self.resolutions[sensor_id]
+        zoom = self.zooms[sensor_id]
+        hfov = float(hfov * np.pi / 180.0)
+        fx = np.tan(hfov / 2.0) / zoom
+        fy = fx * h / w
+        fx, fy = 1 / fx, 1 / fy
+        cx = cy = 0
+        k = np.array(
+            [
+                [fx, 0.0, cx, 0.0],
+                [0.0, fy, cy, 0.0],
+                [0.0, 0.0, 1.0, 0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
+        return k, np.linalg.inv(k)
 
-            # Inverse K
-            self.inv_k.append(np.linalg.inv(k))
+    def get_intrinsic_matrix_2(self, sensor_id: 0, hfov=90):
+        h, w = self.resolutions[sensor_id]
+        zoom = self.zooms[sensor_id]
+        cx = self.cx
+        cy = self.cy
+        fx = fy = self.focal_length
+        k = np.array(
+            [
+                [fx, 0.0, cx, 0.0],
+                [0.0, fy, cy, 0.0],
+                [0.0, 0.0, 1.0, 0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
+
+        return k, np.linalg.inv(k)
 
     def __call__(self, observations: dict, state: Dict[str, Any]) -> Dict[str, Any]:
         """Convert depth image to 3D point cloud.
@@ -179,21 +216,31 @@ class DroneDepthTo3DLocations:
         for i, sensor_id in enumerate(self.sensor_ids):
             agent_obs = observations[self.agent_id][sensor_id]
             depth_patch = agent_obs["depth"]
+            if self.method == self.get_intrinsic_matrix_1:
+                # Approximate true world coordinates
+                x, y = np.meshgrid(
+                    np.linspace(-1, 1, self.w[i]), np.linspace(1, -1, self.h[i])
+                )
+                x = x.reshape(1, self.h[i], self.w[i])
+                y = y.reshape(1, self.h[i], self.w[i])
 
-            # Approximate true world coordinates
-            x, y = np.meshgrid(
-                np.linspace(-1, 1, self.w[i]), np.linspace(1, -1, self.h[i])
-            )
-            x = x.reshape(1, self.h[i], self.w[i])
-            y = y.reshape(1, self.h[i], self.w[i])
-
-            # Unproject 2D camera coordinates into 3D coordinates relative to the agent
-            depth = depth_patch.reshape(1, self.h[i], self.w[i])
-            xyz = np.vstack((x * depth, y * depth, -depth, np.ones(depth.shape)))
-            xyz = xyz.reshape(4, -1)
-            xyz = np.matmul(self.inv_k[i], xyz)
-            sensor_frame_data = xyz.T.copy()
-            observations[self.agent_id][sensor_id]["xyz"] = xyz
+                # Unproject 2D camera coordinates into 3D coordinates relative to the agent
+                depth = depth_patch.reshape(1, self.h[i], self.w[i])
+                xyz = np.vstack((x * depth, y * depth, -depth, np.ones(depth.shape)))
+                xyz = xyz.reshape(4, -1)
+                xyz = np.matmul(self.inv_k[i], xyz)
+                sensor_frame_data = xyz.T.copy()
+                print(f"------ xyz shape: {xyz.shape}")
+                print(f"------ xyz 0-5: {xyz[:, :5]}")
+            elif self.method == self.get_intrinsic_matrix_2:
+                xyz = depth_to_point_cloud(-1 * depth_patch)
+                xyz = xyz.reshape(-1, 3)
+                xyz = np.hstack((xyz, np.ones((xyz.shape[0], 1))))
+                xyz = xyz.T
+                print(f"------ xyz shape: {xyz.shape}")
+                sensor_frame_data = xyz.T.copy()
+            else:
+                raise ValueError(f"Invalid method: {self.method}")
 
             if self.world_coord and state is not None:
                 # Get agent and sensor states from state dictionary
@@ -250,6 +297,50 @@ class DroneDepthTo3DLocations:
         return observations
 
 
+def depth_to_point_cloud(depth_image):
+    height, width = depth_image.shape
+    fx = 920
+    fy = 920
+    cx = 460
+    cy = 351
+
+    # Create a meshgrid of pixel coordinates (u, v)
+    u = np.arange(width)
+    v = np.arange(height)
+    uu, vv = np.meshgrid(u, v)
+
+    # Compute 3D coordinates
+    z = depth_image
+    x = (uu - cx) * z / fx
+    y = (vv - cy) * z / fy
+
+    # Stack into point cloud shape (H, W, 3)
+    points = np.stack((x, y, z), axis=-1)
+
+    return points  # Shape: (H, W, 3)
+
+
+def sample_every_other(step, *arrays):
+    return [array[::step] for array in arrays]
+
+
+env = DroneImageEnvironment(data_path="potted_meat_can_v4")
+agent = env.agent
+view_finder = agent.sensors["view_finder"]
+
+# Data options
+stepisodes = list(range(12))
+update_sensor_data = True
+update_agent_state = True
+recenter_depth = True
+
+# Plotting options
+lim = 0.3
+
+fig = plt.figure(figsize=(10, 10))
+ax = fig.add_subplot(1, 1, 1, projection="3d")
+draw_origin(ax)
+
 tform = DroneDepthTo3DLocations(
     agent_id="agent_id_0",
     sensor_ids=["view_finder"],
@@ -259,41 +350,35 @@ tform = DroneDepthTo3DLocations(
 )
 
 
-# def load():
-env = DroneImageEnvironment(data_path="potted_meat_can_v1")
 all_xyz = []
 all_colors = []
-counter = 0
-
-for step_num, stepisode in enumerate(
-    [0, 1, 2, 3],
-):  # def get_stepisode_data(env, stepisode):
-    data = env._load_stepisode_data(stepisode)
+for i, stepisode in enumerate(stepisodes):
     stepisode_dir = env.data_path / f"{stepisode}"
-    image = data["image"]
+    data = env.load_stepisode_data(stepisode)
     agent_state = data["agent_state"]
-    depth = data["depth"]
-    bboxes = data["bbox"]
-
-    # Update agent state
-    agent = env._agent
-    agent.position = np.array(agent_state["agent_position"])
-    agent.rotation = qt.from_float_array(agent_state["agent_rotation"])
 
     # Update sensor data
-    view_finder = agent.sensors["view_finder"]
-    view_finder.rgb = image
-    view_finder.rgba = image / 255.0
-    alpha = np.ones((*view_finder.rgb.shape[:-1], 1))
-    view_finder.rgba = np.concatenate([view_finder.rgba, alpha], axis=-1)
-    view_finder.depth = depth
+    if i == 0 or update_sensor_data:
+        view_finder.rgb = data["image"]
+        view_finder.rgba = as_rgba(view_finder.rgb) / 255
+        view_finder.depth = data["depth"]
+        object_mask = data["object_mask"]
+        # view_finder.depth *= -1
+        if recenter_depth:
+            depth_vals = view_finder.depth[object_mask]
+            delta = 0.2 - np.mean(depth_vals)
+            view_finder.depth += delta
+
+    # Update agent state
+    if i == 0 or update_agent_state:
+        agent.position = data["agent_state"]["position"]
+        agent.rotation = data["agent_state"]["rotation"]
+
+    draw_agent(ax, agent.position, agent.rotation)
+    # agent.rotation = agent.rotation.inverse()
 
     obs_in = agent.observation_dict()
     state_in = agent.state_dict()
-    print(f"stepisode {stepisode}")
-    print("=======================")
-    print(state_in)
-    print("======================")
     obs_out = tform(obs_in, state_in)
 
     xyz = obs_out["agent_id_0"]["view_finder"]["semantic_3d"][:, 0:3]
@@ -301,15 +386,7 @@ for step_num, stepisode in enumerate(
     colors = rgba.reshape(4, -1).T
 
     # Semantic Masking
-    in_bbox = np.zeros_like(depth, dtype=bool)
-    bbox = bboxes["object"]
-    x1, y1, x2, y2 = bbox
-    in_bbox[y1:y2, x1:x2] = True
-    in_range = np.ones_like(depth, dtype=bool)
-    in_range[depth < env.depth_range[0]] = False
-    in_range[depth > env.depth_range[1]] = False
-    semantic = in_range & in_bbox
-    semantic_1d = semantic.reshape(-1)
+    semantic_1d = object_mask.reshape(-1)
     inds = np.where(semantic_1d)[0]
     xyz = xyz[inds]
     colors = colors[inds]
@@ -317,51 +394,42 @@ for step_num, stepisode in enumerate(
     all_xyz.append(xyz)
     all_colors.append(colors)
 
-# xyz, colors = np.concatenate(all_xyz, axis=0), np.concatenate(all_colors, axis=0)
-# rand_inds = np.random.choice(len(xyz), size=20000, replace=False)
-# xyz = xyz[rand_inds]
-# colors = colors[rand_inds]
 
-# # downsample = 100
-# # xyz = xyz[::downsample]
-# # colors = colors[::downsample]
+color_method = "fixed"
+subsample_method = "every_other"
 
-# fig = plt.figure(figsize=(10, 10))
-# ax = fig.add_subplot(1, 1, 1, projection="3d")
-# X = xyz[:, 0]
-# Y = xyz[:, 1]
-# Z = xyz[:, 2]
-# ax.scatter(X, Z, Y, c=colors, s=5)
-# ax.set_xlabel("X")
-# ax.set_ylabel("Z")
-# ax.set_zlabel("Y")
-# # axes3d_set_aspect_equal(ax)
-# plt.show()
-
-
-fig = plt.figure(figsize=(10, 10))
-ax = fig.add_subplot(1, 1, 1, projection="3d")
-
-scatter_colors = ["black", "red", "blue", "yellow"]
 
 for i, xyz in enumerate(all_xyz):
-    colors = all_colors[i]
-    # rand_inds = np.random.choice(len(xyz), size=25000, replace=False)
-    # xyz = xyz[rand_inds]
-    # colors = colors[rand_inds]
-    xyz = xyz[::50]
-    colors = colors[::50]
+    if color_method == "fixed":
+        cmap = plt.cm.inferno
+        color = cmap(np.linspace(0, 1, len(all_xyz)))[i]
+        colors = np.broadcast_to(color, (len(xyz), 4))
+
+    elif color_method == "true":
+        colors = all_colors[i]
+    else:
+        raise ValueError(f"Invalid color method: {color_method}")
+
+    if subsample_method == "every_other":
+        xyz, colors = sample_every_other(25, xyz, colors)
+    else:
+        raise ValueError(f"Invalid subsample method: {subsample_method}")
+
     X = xyz[:, 0]
     Y = xyz[:, 1]
     Z = xyz[:, 2]
-    # ax.scatter(X, Z, Y, c=scatter_colors[i], s=5)
-    ax.scatter(X, Z, Y, c=colors, s=10, alpha=0.1)
+    ax.scatter(X, Y, Z, c=colors, s=10, alpha=0.2)
+    ax.view_init(elev=-42, azim=90)  # orient Z into screen
 
 
+ax.set_xlim([-lim, lim])
+ax.set_ylim([-lim, lim])
+ax.set_zlim([-lim, lim])
+
+# Adjust camera view: elev = elevation (Y rotation), azim = azimuth (Z rotation)
+ax.view_init(elev=-42, azim=90)  # orient Z into screen
 ax.set_xlabel("X")
-ax.set_ylabel("Z")
-ax.set_zlabel("Y")
-axes3d_set_aspect_equal(ax)
-# ax.set_xlim(-0.1, 0.1)
-# ax.set_ylim(-0.1, 0.1)
+ax.set_ylabel("Y")
+ax.set_zlabel("Z")
 plt.show()
+

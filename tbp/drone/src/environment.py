@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import imageio
 import numpy as np
-import quaternion
+import quaternion as qt
 from djitellopy import Tello
 
 from tbp.drone.src.actions import (
@@ -46,7 +46,7 @@ MINIMUM_DISTANCE = 0.2  # Minimal traversible distance by drone in meters.
 class Sensor:
     name: str
     position: np.ndarray
-    rotation: quaternion.quaternion
+    rotation: qt.quaternion
     rgb: Optional[np.ndarray] = None
     rgba: Optional[np.ndarray] = None
     depth: Optional[np.ndarray] = None
@@ -56,7 +56,7 @@ class Sensor:
 class Agent:
     name: str
     position: np.ndarray
-    rotation: quaternion.quaternion
+    rotation: qt.quaternion
     sensors: Dict[str, Sensor]
 
     def observation_dict(self):
@@ -107,9 +107,9 @@ class DroneEnvironment(EmbodiedEnvironment):
 
     _action_space = DroneActionSpace([])
     _initial_agent_position = np.array([0.0, 0.0, 0.0])
-    _initial_agent_rotation = quaternion.quaternion(1, 0, 0, 0)
+    _initial_agent_rotation = qt.quaternion(1, 0, 0, 0)
     _initial_sensor_position = np.array([0.0, 0.0, 0.0])
-    _initial_sensor_rotation = quaternion.quaternion(1, 0, 0, 0)
+    _initial_sensor_rotation = qt.quaternion(1, 0, 0, 0)
 
     def __init__(self, patch_size: int = 64):
         super().__init__()
@@ -137,6 +137,10 @@ class DroneEnvironment(EmbodiedEnvironment):
     @property
     def action_space(self) -> DroneActionSpace:
         return self._action_space
+
+    @property
+    def agent(self) -> Agent:
+        return self._agent
 
     """
     ------------------------------------------------------------------------------------
@@ -448,8 +452,7 @@ class DroneImageEnvironment(DroneEnvironment):
         self,
         patch_size: int = 64,
         data_path: Optional[os.PathLike] = None,
-        depth_scale_factor: float = 1.0,
-        depth_range: Tuple[float, float] = (0.05, 0.4),
+        depth_range: Tuple[float, float] = (-np.inf, 0.35),
     ):
         """Initialize environment.
 
@@ -459,7 +462,7 @@ class DroneImageEnvironment(DroneEnvironment):
                 ~/tbp/data/worldimages/labeled_scenes/
         """
         super().__init__(patch_size)
-        self.depth_scale_factor = depth_scale_factor
+
         self.depth_range = depth_range
 
         # Initialize data path
@@ -485,6 +488,7 @@ class DroneImageEnvironment(DroneEnvironment):
 
         self._current_stepisode = 0
         self._next_action = None
+        self._current_data = {}
 
     """
     ------------------------------------------------------------------------------------
@@ -516,20 +520,20 @@ class DroneImageEnvironment(DroneEnvironment):
         self._step_counter += 1
         return obs
 
-    def _init_stepisode(self):
+    def init_stepisode(self):
         # Load image and state
-        image, state = self._load_stepisode_data(self._current_stepisode)
+        self._current_data = self.load_stepisode_data(self._current_stepisode)
 
         # Update agent and sensor states
-        pitch, roll, yaw = state["pitch"], state["roll"], state["yaw"]
-        self._agent.rotation = pitch_roll_yaw_to_quaternion(pitch, roll, yaw)
-        self._agent.sensors["view_finder"].rgba = image
+        agent_state = data["agent_state"]
+        self._agent.position = agent_state["position"]
+        self._agent.rotation = agent_state["rotation"]
 
         # Do processing.
         # - estimate depth
         # - find arcuro, update drone position from it, etc.
 
-    def _load_stepisode_data(self, stepisode: int):
+    def load_stepisode_data(self, stepisode: int):
         """Load depth and rgb data for next scene environment.
 
         Returns:
@@ -541,48 +545,31 @@ class DroneImageEnvironment(DroneEnvironment):
         data = {}
 
         # RGB image
-        image = imageio.imread(stepisode_dir / "image.png")
-        data["image"] = image
+        path = stepisode_dir / "image.png"
+        if path.exists():
+            data["image"] = imageio.imread(path)
 
         # Depth image
-        depth = np.load(stepisode_dir / "depth.npy")
-        data["depth"] = self.depth_scale_factor * depth
-
-        # Drone state
-        with open(stepisode_dir / "drone_state.json", "r") as f:
-            drone_state = json.load(f)
-        data["drone_state"] = drone_state
+        path = stepisode_dir / "depth.npy"
+        if path.exists():
+            data["depth"] = np.load(path)
 
         # Agent state
-        with open(stepisode_dir / "agent_state.json", "r") as f:
-            agent_state = json.load(f)
-        data["agent_state"] = agent_state
+        path = stepisode_dir / "agent_state.json"
+        if path.exists():
+            with open(path, "r") as f:
+                agent_state = json.load(f)
+                data["agent_state"] = {
+                    "position": np.array(agent_state["position"]),
+                    "rotation": qt.from_float_array(np.array(agent_state["rotation"])),
+                }
 
-        # Bounding box
-        with open(stepisode_dir / "bbox.json", "r") as f:
-            bbox = json.load(f)
-        data["bbox"] = bbox
+        # Object mask
+        path = stepisode_dir / "object_mask.npy"
+        if path.exists():
+            data["object_mask"] = np.load(path)
 
         return data
-
-        # state = self._agent.state_dict()
-        # # Set data paths
-        # current_depth_path = (
-        #     self.data_path + f"{self.current_scene}/depth_{self.scene_version}.data"
-        # )
-        # current_rgb_path = (
-        #     self.data_path + f"{self.current_scene}/rgb_{self.scene_version}.png"
-        # )
-        # # Load & process data
-        # current_rgb_image = self.load_rgb_data(current_rgb_path)
-        # height, width, _ = current_rgb_image.shape
-        # current_depth_image = self.load_depth_data(current_depth_path, height, width)
-        # current_depth_image = self.process_depth_data(current_depth_image)
-        # # set start location to center of image
-        # # TODO: find object if not in center
-        # obs_shape = current_depth_image.shape
-        # start_location = [obs_shape[0] // 2, obs_shape[1] // 2]
-        # return current_depth_image, current_rgb_image, start_location
 
     def get_3d_scene_point_cloud(self):
         """Turn 2D depth image into 3D pointcloud using DepthTo3DLocations.
