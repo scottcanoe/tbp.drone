@@ -11,6 +11,7 @@ import warnings
 from numbers import Number
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+from tbp.drone.src.vision.landmark_detection.camera_intrinsics import camera_matrix
 
 import cv2
 import imageio
@@ -18,6 +19,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 import quaternion as qt
+import plotly.graph_objects as go
 from djitellopy import Tello
 from scipy.spatial.transform import Rotation
 
@@ -55,7 +57,7 @@ from tbp.drone.src.spatial import (
 from tbp.drone.src.vision.depth_processing.depth_estimator import DepthEstimator
 from tbp.drone.src.vision.depth_processing.object_segmenter import ObjectSegmenter
 
-DATA_PATH = Path.home() / "tbp/data/worldimages/drone/potted_meat_can_v1"
+DATA_PATH = Path.home() / "tbp/data/worldimages/drone/potted_meat_can_v3"
 
 
 class DroneDepthTo3DLocations:
@@ -159,13 +161,10 @@ class DroneDepthTo3DLocations:
             self.h.append(h)
             self.w.append(w)
 
-            # Intrinsic matrix, K
-            # Assuming skew is 0 for pinhole camera and center at (0,0)
-
             # Inverse K
             self.inv_k.append(np.linalg.inv(k))
 
-    def __call__(self, observations: dict, state: Dict[str, Any]) -> Dict[str, Any]:
+    def __call__(self, observations: dict, state: Dict[str, Any], semantic: npt.NDArray[np.int32]) -> Dict[str, Any]:
         """Convert depth image to 3D point cloud.
 
         Args:
@@ -226,7 +225,7 @@ class DroneDepthTo3DLocations:
 
             # Extract 3D coordinates of detected objects (semantic_id != 0)
             # semantic = surface_patch.reshape(1, -1)
-            semantic = np.ones_like(depth_patch, dtype=int).reshape(1, -1)
+            # semantic = np.ones_like(depth_patch, dtype=int).reshape(1, -1)
             if self.get_all_points:
                 semantic_3d = xyz.transpose(1, 0)
                 semantic_3d[:, 3] = semantic[0]
@@ -238,10 +237,27 @@ class DroneDepthTo3DLocations:
                     sensor_frame_data
                 )
             else:
-                detected = semantic.any(axis=0)
+                # Debug prints
+                print(f"XYZ shape before processing: {xyz.shape}")
+                print(f"Semantic mask shape: {semantic.shape}")
+                
+                # Get the mask for valid points
+                mask = semantic[0]  # shape: (691200,)
+                print(f"Mask shape: {mask.shape}")
+                
                 xyz = xyz.transpose(1, 0)
-                semantic_3d = xyz[detected]
-                semantic_3d[:, 3] = semantic[0, detected]
+                
+                # Filter points using mask
+                semantic_3d = xyz[mask]  # Select points where mask is True
+                # Also mask colors
+                colors = image.reshape(-1, 3) / 255.0
+                colors = colors[mask]
+                print(f"Semantic 3D shape after masking: {semantic_3d.shape}")
+                
+                # Add semantic label column (1 for detected points)
+                semantic_label = np.ones((semantic_3d.shape[0], 1))
+                semantic_3d = np.hstack([semantic_3d, semantic_label, colors])
+                print(semantic_3d.shape)
 
             # Add transformed observation to existing dict. We don't need to create
             # a deepcopy because we are appending a new observation
@@ -254,26 +270,42 @@ tform = DroneDepthTo3DLocations(
     agent_id="agent_id_0",
     sensor_ids=["view_finder"],
     resolutions=[(720, 960)],
-    focal_length=920.0,
     zooms=1.0,
+    world_coord=True,
+    get_all_points=False,
 )
 
 
 # def load():
-env = DroneImageEnvironment(data_path="potted_meat_can_v1")
+env = DroneImageEnvironment(data_path="potted_meat_can_v3")
 all_xyz = []
 all_colors = []
 counter = 0
 
 for step_num, stepisode in enumerate(
-    [0, 1, 2, 3],
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
 ):  # def get_stepisode_data(env, stepisode):
     data = env._load_stepisode_data(stepisode)
     stepisode_dir = env.data_path / f"{stepisode}"
     image = data["image"]
+    # save image plot
+    plt.imshow(image)
+    plt.savefig(f"imgs/image_{stepisode}.png")
+    plt.close()
     agent_state = data["agent_state"]
     depth = data["depth"]
     bboxes = data["bbox"]
+    x1, y1, x2, y2 = bboxes["object"]
+    bbox_input = [[x1, y1, x2, y2]]  # SAM expects a list of boxes
+    sam_model_path = Path("~/tbp/tbp.drone/models/sam_vit_b_01ec64.pth").expanduser()
+    object_segmenter = ObjectSegmenter(model_path=sam_model_path)
+    mask, _ = object_segmenter.segment_image(image, input_boxes=bbox_input)
+    # reshape mask to 1 x N
+    # should be same as depth.shape
+    mask = mask.reshape(1, -1)
+    print(mask.shape)
+    print(depth.shape)
+
 
     # Update agent state
     agent = env._agent
@@ -294,25 +326,25 @@ for step_num, stepisode in enumerate(
     print("=======================")
     print(state_in)
     print("======================")
-    obs_out = tform(obs_in, state_in)
+    obs_out = tform(obs_in, state_in, mask)
 
     xyz = obs_out["agent_id_0"]["view_finder"]["semantic_3d"][:, 0:3]
-    rgba = obs_out["agent_id_0"]["view_finder"]["rgba"]
-    colors = rgba.reshape(4, -1).T
+    # Use the new colors attribute instead of rgba
+    colors = obs_out["agent_id_0"]["view_finder"]["semantic_3d"][:, 5:]
 
-    # Semantic Masking
-    in_bbox = np.zeros_like(depth, dtype=bool)
-    bbox = bboxes["object"]
-    x1, y1, x2, y2 = bbox
-    in_bbox[y1:y2, x1:x2] = True
-    in_range = np.ones_like(depth, dtype=bool)
-    in_range[depth < env.depth_range[0]] = False
-    in_range[depth > env.depth_range[1]] = False
-    semantic = in_range & in_bbox
-    semantic_1d = semantic.reshape(-1)
-    inds = np.where(semantic_1d)[0]
-    xyz = xyz[inds]
-    colors = colors[inds]
+    # # Semantic Masking
+    # in_bbox = np.zeros_like(depth, dtype=bool)
+    # bbox = bboxes["object"]
+    # x1, y1, x2, y2 = bbox
+    # in_bbox[y1:y2, x1:x2] = True
+    # in_range = np.ones_like(depth, dtype=bool)
+    # in_range[depth < env.depth_range[0]] = False
+    # in_range[depth > env.depth_range[1]] = False
+    # semantic = in_range & in_bbox
+    # semantic_1d = semantic.reshape(-1)
+    # inds = np.where(semantic_1d)[0]
+    # xyz = xyz[inds]
+    # colors = colors[inds]
 
     all_xyz.append(xyz)
     all_colors.append(colors)
@@ -339,29 +371,49 @@ for step_num, stepisode in enumerate(
 # plt.show()
 
 
-fig = plt.figure(figsize=(10, 10))
-ax = fig.add_subplot(1, 1, 1, projection="3d")
+# Create an interactive Plotly figure
+fig = go.Figure()
 
-scatter_colors = ["black", "red", "blue", "yellow"]
-
+# Add each point cloud as a separate scatter3d trace
 for i, xyz in enumerate(all_xyz):
+    print(f"Done with xyz {i}")
     colors = all_colors[i]
-    # rand_inds = np.random.choice(len(xyz), size=25000, replace=False)
-    # xyz = xyz[rand_inds]
-    # colors = colors[rand_inds]
-    xyz = xyz[::50]
-    colors = colors[::50]
-    X = xyz[:, 0]
-    Y = xyz[:, 1]
-    Z = xyz[:, 2]
-    # ax.scatter(X, Z, Y, c=scatter_colors[i], s=5)
-    ax.scatter(X, Z, Y, c=colors, s=10, alpha=0.1)
+    
+    # Reduce downsampling for better detail
+    xyz_filtered = xyz[::10]  # Changed from 10 to 2 for more detail
+    colors_filtered = colors[::10]
+    
+    # Convert RGB colors to hex strings for Plotly (removed alpha)
+    hex_colors = [f'rgb({int(r*255)},{int(g*255)},{int(b*255)})' 
+                  for r, g, b in colors_filtered]
+    
+    fig.add_trace(go.Scatter3d(
+        x=xyz_filtered[:, 0],
+        y=xyz_filtered[:, 1],
+        z=xyz_filtered[:, 2],  # Swapping Y and Z to match previous visualization
+        mode='markers',
+        marker=dict(
+            size=2,
+            color=hex_colors,
+            opacity=0.8  # Increased opacity for sharper appearance
+        ),
+        name=f'Point Cloud {i}'
+    ))
+
+# Update the layout for better visualization
+fig.update_layout(
+    scene=dict(
+        xaxis_title='X',
+        yaxis_title='Z',
+        zaxis_title='Y',
+        aspectmode='cube'  # This ensures equal aspect ratio
+    ),
+    width=1000,
+    height=1000,
+    showlegend=True
+)
+
+# Show the interactive plot
+fig.show()
 
 
-ax.set_xlabel("X")
-ax.set_ylabel("Z")
-ax.set_zlabel("Y")
-axes3d_set_aspect_equal(ax)
-# ax.set_xlim(-0.1, 0.1)
-# ax.set_ylim(-0.1, 0.1)
-plt.show()

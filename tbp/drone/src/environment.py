@@ -449,7 +449,7 @@ class DroneImageEnvironment(DroneEnvironment):
         patch_size: int = 64,
         data_path: Optional[os.PathLike] = None,
         depth_scale_factor: float = 1.0,
-        depth_range: Tuple[float, float] = (0.05, 0.4),
+        depth_range: Tuple[float, float] = (0, 10000)
     ):
         """Initialize environment.
 
@@ -549,9 +549,9 @@ class DroneImageEnvironment(DroneEnvironment):
         data["depth"] = self.depth_scale_factor * depth
 
         # Drone state
-        with open(stepisode_dir / "drone_state.json", "r") as f:
-            drone_state = json.load(f)
-        data["drone_state"] = drone_state
+        # with open(stepisode_dir / "drone_state.json", "r") as f:
+        #     drone_state = json.load(f)
+        # data["drone_state"] = drone_state
 
         # Agent state
         with open(stepisode_dir / "agent_state.json", "r") as f:

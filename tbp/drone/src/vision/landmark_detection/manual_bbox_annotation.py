@@ -36,7 +36,7 @@ def process_dataset():
     """Process all PNG images in the dataset directory for manual bounding box annotation."""
     # Setup paths
     imgs_dir = os.path.expanduser("~/tbp/tbp.drone/imgs")
-    dataset_dir = os.path.join(imgs_dir, "spam_dataset_v1")
+    dataset_dir = os.path.join(imgs_dir, "spam_v3")
     annotations_dir = os.path.join(dataset_dir, "bbox_annotations")
     
     # Create output directory if it doesn't exist
@@ -161,8 +161,8 @@ def process_dataset():
 def process_single_file(img_path):
     """Process a single image file for manual bounding box annotation."""
     # Setup paths
-    imgs_dir = os.path.expanduser("~/tbp/tbp.drone/imgs")
-    dataset_dir = os.path.join(imgs_dir, "spam_dataset_v1")
+    imgs_dir = os.path.expanduser("~/tbp/tbp.drone/")
+    dataset_dir = os.path.join(imgs_dir, "potted_meat_can_v4")
     annotations_dir = os.path.join(dataset_dir, "bbox_annotations")
     
     # Create output directory if it doesn't exist
