@@ -18,7 +18,7 @@ class DroneEnvironmentDataset(EnvironmentDataset):
     def reset(self):
         # below is just a copy and paste of the parent class
         observation = self.env.reset()  # starts the drone
-        state = self.env.get_state() # returns {'agent_id_0': {'position': [...], 'rotation': [...], 'velocity': [...]}}
+        state = self.env.get_state()  # returns {'agent_id_0': {'position': [...], 'rotation': [...], 'velocity': [...]}}
         # if self.transform is not None:
         #     observation = self.apply_transform(self.transform, observation, state)
         return observation, state

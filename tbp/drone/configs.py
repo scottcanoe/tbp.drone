@@ -165,4 +165,3 @@ class DroneImageDatasetArgs:
         #         get_all_points=False,  # Only get object points
         #     )
         # ]
-

@@ -57,7 +57,6 @@ from tbp.drone.src.vision.depth_processing.depth_estimator import DepthEstimator
 DATA_PATH = Path.home() / "tbp/data/worldimages/drone/"
 
 
-
 # def fit_depthanything_to_ground_truth():
 """Fit a linear function to the depth map."""
 depth_estimator = DepthEstimator()

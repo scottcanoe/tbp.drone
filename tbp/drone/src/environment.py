@@ -449,7 +449,7 @@ class DroneImageEnvironment(DroneEnvironment):
         patch_size: int = 64,
         data_path: Optional[os.PathLike] = None,
         depth_scale_factor: float = 1.0,
-        depth_range: Tuple[float, float] = (0, 10000)
+        depth_range: Tuple[float, float] = (0, 10000),
     ):
         """Initialize environment.
 
@@ -732,4 +732,3 @@ class DroneImageEnvironment(DroneEnvironment):
             == self.patch_size * self.patch_size
         ), f"Didn't extract a patch of size {self.patch_size}"
         return depth_patch, rgb_patch, depth3d_patch, sensor_frame_patch
-

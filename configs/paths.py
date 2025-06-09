@@ -8,4 +8,4 @@ ROOT_DIR = Path(os.path.dirname(os.path.dirname(__file__)))
 DEPTH_ANYTHING_PATH = str(ROOT_DIR.parent / "Depth-Anything-V2")
 SEGMENT_ANYTHING_PATH = str(ROOT_DIR.parent / "segment-anything")
 
-# Add any other external module paths here as needed 
+# Add any other external module paths here as needed

@@ -57,10 +57,11 @@ from tbp.drone.src.vision.depth_processing.object_segmenter import ObjectSegment
 
 DATA_PATH = Path.home() / "tbp/data/worldimages/drone/potted_meat_can_v4"
 
+
 def compute_agent_states():
     n_stepisodes = 12
     radius = 0.2703
-    height = 0.
+    height = 0.0
 
     stepisodes = np.arange(n_stepisodes)
     # For positions

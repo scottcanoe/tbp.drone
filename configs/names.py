@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, fields
 from typing import Any
+
 NAMES: list[str] = []
 
 
@@ -34,5 +35,6 @@ class Experiments:
     # Add your experiment names here
     # e.g.: my_experiment: dict[str, Any]
     pretrain_drone: dict[str, Any]
+
 
 NAMES.extend(field.name for field in fields(Experiments))

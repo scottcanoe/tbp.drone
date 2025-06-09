@@ -164,7 +164,9 @@ class DroneDepthTo3DLocations:
             # Inverse K
             self.inv_k.append(np.linalg.inv(k))
 
-    def __call__(self, observations: dict, state: Dict[str, Any], semantic: npt.NDArray[np.int32]) -> Dict[str, Any]:
+    def __call__(
+        self, observations: dict, state: Dict[str, Any], semantic: npt.NDArray[np.int32]
+    ) -> Dict[str, Any]:
         """Convert depth image to 3D point cloud.
 
         Args:
@@ -240,20 +242,20 @@ class DroneDepthTo3DLocations:
                 # Debug prints
                 print(f"XYZ shape before processing: {xyz.shape}")
                 print(f"Semantic mask shape: {semantic.shape}")
-                
+
                 # Get the mask for valid points
                 mask = semantic[0]  # shape: (691200,)
                 print(f"Mask shape: {mask.shape}")
-                
+
                 xyz = xyz.transpose(1, 0)
-                
+
                 # Filter points using mask
                 semantic_3d = xyz[mask]  # Select points where mask is True
                 # Also mask colors
                 colors = image.reshape(-1, 3) / 255.0
                 colors = colors[mask]
                 print(f"Semantic 3D shape after masking: {semantic_3d.shape}")
-                
+
                 # Add semantic label column (1 for detected points)
                 semantic_label = np.ones((semantic_3d.shape[0], 1))
                 semantic_3d = np.hstack([semantic_3d, semantic_label, colors])
@@ -305,7 +307,6 @@ for step_num, stepisode in enumerate(
     mask = mask.reshape(1, -1)
     print(mask.shape)
     print(depth.shape)
-
 
     # Update agent state
     agent = env._agent
@@ -378,42 +379,44 @@ fig = go.Figure()
 for i, xyz in enumerate(all_xyz):
     print(f"Done with xyz {i}")
     colors = all_colors[i]
-    
+
     # Reduce downsampling for better detail
     xyz_filtered = xyz[::10]  # Changed from 10 to 2 for more detail
     colors_filtered = colors[::10]
-    
+
     # Convert RGB colors to hex strings for Plotly (removed alpha)
-    hex_colors = [f'rgb({int(r*255)},{int(g*255)},{int(b*255)})' 
-                  for r, g, b in colors_filtered]
-    
-    fig.add_trace(go.Scatter3d(
-        x=xyz_filtered[:, 0],
-        y=xyz_filtered[:, 1],
-        z=xyz_filtered[:, 2],  # Swapping Y and Z to match previous visualization
-        mode='markers',
-        marker=dict(
-            size=2,
-            color=hex_colors,
-            opacity=0.8  # Increased opacity for sharper appearance
-        ),
-        name=f'Point Cloud {i}'
-    ))
+    hex_colors = [
+        f"rgb({int(r * 255)},{int(g * 255)},{int(b * 255)})"
+        for r, g, b in colors_filtered
+    ]
+
+    fig.add_trace(
+        go.Scatter3d(
+            x=xyz_filtered[:, 0],
+            y=xyz_filtered[:, 1],
+            z=xyz_filtered[:, 2],  # Swapping Y and Z to match previous visualization
+            mode="markers",
+            marker=dict(
+                size=2,
+                color=hex_colors,
+                opacity=0.8,  # Increased opacity for sharper appearance
+            ),
+            name=f"Point Cloud {i}",
+        )
+    )
 
 # Update the layout for better visualization
 fig.update_layout(
     scene=dict(
-        xaxis_title='X',
-        yaxis_title='Z',
-        zaxis_title='Y',
-        aspectmode='cube'  # This ensures equal aspect ratio
+        xaxis_title="X",
+        yaxis_title="Z",
+        zaxis_title="Y",
+        aspectmode="cube",  # This ensures equal aspect ratio
     ),
     width=1000,
     height=1000,
-    showlegend=True
+    showlegend=True,
 )
 
 # Show the interactive plot
 fig.show()
-
-

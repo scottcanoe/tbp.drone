@@ -8,6 +8,7 @@
 # https://opensource.org/licenses/MIT.
 
 """Config to just get Drone flying."""
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import (
@@ -55,7 +56,6 @@ from tbp.monty.frameworks.models.sensor_modules import (
 # ------------------------------------------------------------------------------
 # Drone
 # ------------------------------------------------------------------------------
-
 
 
 # The below is modeled after `supervised_pre_training_base from benchmarks/configs/pretraining_experiments.py`

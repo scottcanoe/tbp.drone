@@ -9,6 +9,4 @@ This module provides high-level functionality for:
 
 from .point_cloud import DroneDepthTo3DLocations
 
-__all__ = [
-    'DroneDepthTo3DLocations'
-] 
+__all__ = ["DroneDepthTo3DLocations"]

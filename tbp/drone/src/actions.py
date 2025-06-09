@@ -37,6 +37,7 @@ class DroneActionSpace(tuple, ActionSpace):
     def sample(self):
         raise NotImplementedError
 
+
 class DroneAction(Action):
     """Base class for all drone actions. Hard-codes agent_id to "agent_id_0"."""
 
@@ -48,13 +49,11 @@ class DroneAction(Action):
 
 
 class TakeOff(DroneAction):
-
     def act(self, actuator: Actuator):
         actuator.actuate_takeoff(self)
 
 
 class Land(DroneAction):
-
     def act(self, actuator: Actuator):
         actuator.actuate_land(self)
 
@@ -138,6 +137,7 @@ class MoveDown(DroneAction):
 
     def act(self, actuator: Actuator):
         actuator.actuate_move_down(self)
+
 
 class SetHeight(DroneAction):
     def __init__(self, height: Number):

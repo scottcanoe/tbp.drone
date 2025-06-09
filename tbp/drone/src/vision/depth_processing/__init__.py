@@ -9,7 +9,4 @@ This module provides the underlying implementations for:
 from .depth_estimator import DepthEstimator
 from .object_segmenter import ObjectSegmenter
 
-__all__ = [
-    'DepthEstimator',
-    'ObjectSegmenter'
-] 
+__all__ = ["DepthEstimator", "ObjectSegmenter"]

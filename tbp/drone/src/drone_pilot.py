@@ -10,7 +10,7 @@ from typing import Protocol
 from djitellopy import Tello, TelloException
 from imageio import imwrite
 
-log = logging.getLogger('drone_pilot')
+log = logging.getLogger("drone_pilot")
 
 
 class DronePilot(Process):
@@ -66,19 +66,19 @@ class DronePilot(Process):
         distance = round(distance_m * 100)
         return self.call(MoveRight(distance))
 
-    def move_forward(self, distance_m = 0.20):
+    def move_forward(self, distance_m=0.20):
         distance = round(distance_m * 100)
         return self.call(MoveForward(distance))
 
-    def move_backward(self, distance_m = 0.20):
+    def move_backward(self, distance_m=0.20):
         distance = round(distance_m * 100)
         return self.call(MoveBackward(distance))
 
-    def move_up(self, distance_m = 0.20):
+    def move_up(self, distance_m=0.20):
         distance = round(distance_m * 100)
         return self.call(MoveUp(distance))
 
-    def move_down(self, distance_m = 0.20):
+    def move_down(self, distance_m=0.20):
         distance = round(distance_m * 100)
         return self.call(MoveDown(distance))
 
@@ -155,6 +155,7 @@ class Land(DroneCommand):
     def act(self, _pilot, tello):
         tello.land()
 
+
 class GetBattery(DroneCommand):
     def act(self, _pilot, tello):
         return tello.get_battery()
@@ -163,6 +164,7 @@ class GetBattery(DroneCommand):
 class GetHeight(DroneCommand):
     def act(self, _pilot, tello):
         return tello.get_height()
+
 
 class GetYaw(DroneCommand):
     def act(self, _pilot, tello):
@@ -173,10 +175,14 @@ class MoveBase(DroneCommand):
     """Base for move commands.
 
     Handles error checking during construction."""
+
     def __init__(self, distance):
         if not 20 <= distance <= 500:
-            raise ValueError("Tello drone cannot move less than 20 cm or "
-                             "more than 500 cm in a single move command.")
+            raise ValueError(
+                "Tello drone cannot move less than 20 cm or "
+                "more than 500 cm in a single move command."
+            )
+
 
 class MoveLeft(MoveBase):
     def __init__(self, distance):
@@ -256,6 +262,7 @@ class TakePhoto(DroneCommand):
 class QueryState(DroneCommand):
     def act(self, _pilot, tello):
         return tello.get_current_state()
+
 
 class Shutdown(DroneCommand):
     def act(self, pilot, tello):
