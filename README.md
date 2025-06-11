@@ -67,10 +67,11 @@ conda activate drone
 This project is currently a work in progress. Here's what you can do with the current codebase:
 
 ### 1. Sample Dataset Processing
-- A sample dataset is provided under `dataset/potted_meat_can_v4` for development and testing
+- A sample dataset is provided under `dataset/potted_meat_can_v4` for development and testing. It is an "offline" dataset that was created under controlled conditions and with known ground-truth object and drone locations and poses.
 - Follow the detailed instructions in [data_processing.md](data_processing.md) to:
   - Process the raw images
   - Generate depth information
+  - Add precomputed agent positions to the dataset.
   - Create 3D point clouds that can be used with Monty for object recognition
 
 ### 2. Available Components
@@ -78,28 +79,21 @@ This project is currently a work in progress. Here's what you can do with the cu
   - Custom dataloaders for handling drone imagery
   - Environment configurations for Monty integration
   - Basic drone control interfaces using DJITelloPy
-  - Vision processing utilities in `tbp/drone/src/vision`
+  - Vision processing utilities in `tbp/drone/src/vision`.
 
 ### 3. Current Limitations
 - The project is not yet running end-to-end
 - Main challenges we're working on:
-  - Retrieving accurate patch information from drone imagery
-  - Constructing coherent 3D point clouds from multiple viewpoints
+  - Retrieving accurate location and pose data from drone imagery
+  - Constructing coherent 3D point clouds from multiple viewpoints and mapping them into world coordinates.    
+  - Building out the environment/dataset/dataloader pipeline. Until this is complete, we won't have runnable monty experiments. In particular, we need to implement the 'saccade-over-image' behavior used in other environments.
   - Integration with Monty's object recognition pipeline
 
-### 4. Running the Pretraining Script
-To experiment with the current implementation:
-
-```bash
-python3 -m pdb run.py -e pretrain_drone
-```
-
-Use the debugger to examine the implementation details and execution flow.
-
-### 5. Development Roadmap
-- [ ] Enhance patch extraction from drone imagery
-- [ ] Optimize 3D point cloud construction
-- [ ] Complete Monty integration
+### 4. Development Roadmap
+- [ ] Enhance patch extraction and drone location from drone imagery and telemetry
+- [ ] Optimize 3D point cloud construction and mapping into world coordinates
+- [ ] Complete Monty integration by building out the environment/dataset/dataloader pipeline
+- [ ] Extend the code to enable on-line Monty and drone usage
 - [ ] Implement comprehensive testing suite
 - [ ] Add validation metrics
 

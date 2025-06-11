@@ -51,6 +51,7 @@ Each view folder (0-11) contains:
       "aruco": [x1, y1, x2, y2]      // ArUco marker coordinates (optional)
   }
   ```
+Other functions related to this dataset, such as adding the predetermined agent positions to the dataset and precomputing depth maps, can be found under `scripts/offline_dataset.py`.
 
 ## Project Structure
 
