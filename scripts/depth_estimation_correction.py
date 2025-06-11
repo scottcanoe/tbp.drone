@@ -1,57 +1,11 @@
-import datetime
-import json
-import logging
-import os
-import pprint as pp
-import shutil
-import subprocess as sp
-import threading
-import time
-import warnings
-from numbers import Number
-from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+"""Development/Exploratory code for calibrating estimated depth values"""
 
-import cv2
+from pathlib import Path
+
 import imageio
 import matplotlib.pyplot as plt
 import numpy as np
-import numpy.typing as npt
-import quaternion as qt
-from djitellopy import Tello
-from scipy.spatial.transform import Rotation
 
-from tbp.drone.src.actions import (
-    Action,
-    Land,
-    LookDown,
-    LookLeft,
-    LookRight,
-    LookUp,
-    MoveBackward,
-    MoveDown,
-    MoveForward,
-    MoveLeft,
-    MoveRight,
-    MoveUp,
-    NextImage,
-    SetHeight,
-    SetYaw,
-    TakeOff,
-    TurnLeft,
-    TurnRight,
-)
-from tbp.drone.src.dataloader import DroneDataLoader
-from tbp.drone.src.drone_pilot import DronePilot
-from tbp.drone.src.environment import DroneEnvironment, DroneImageEnvironment
-from tbp.drone.src.spatial import (
-    as_signed_angle,
-    as_unsigned_angle,
-    compute_relative_angle,
-    pitch_roll_yaw_to_quaternion,
-    quaternion_to_rotation,
-    reorder_quat_array,
-)
 from tbp.drone.src.vision.depth_processing.depth_estimator import DepthEstimator
 
 DATA_PATH = Path.home() / "tbp/data/worldimages/drone/"
