@@ -7,12 +7,16 @@
 # license that can be found in the LICENSE file or at
 # https://opensource.org/licenses/MIT.
 
-"""Module for the paper's experiment configurations."""
+"""Module for the tbp.drone's experiment configurations.
+
+Note: The config(s) defined here will not yet work until further development of
+the environment/dataset/dataloader pipeline.
+"""
 
 from dataclasses import asdict
 
-from configs.names import Experiments
 from configs.drone import pretrain_drone_config
+from configs.names import Experiments
 
 # Add your experiment configurations here
 # e.g.: my_experiment_config = dict(...)
