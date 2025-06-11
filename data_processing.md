@@ -1,169 +1,163 @@
+# Data Processing Guide
+
+This guide explains how to process drone imagery and work with our sample dataset for development and testing. Before integrating with Monty (which currently obtains RGBD dataset from habitat-sim), we experimented with various computer vision approaches including depth extraction and object segmentation.
+
+## Prerequisites
+
+Before you begin, ensure you have:
+1. Python 3.8 installed (required for compatibility)
+2. Conda environment manager installed
+3. Git installed
+4. Access to download large model files (approximately 1GB total)
+
+## Initial Setup
+
+1. Clone the required repositories:
+```bash
+cd ~/tbp
+git clone https://github.com/DepthAnything/Depth-Anything-V2
+git clone https://github.com/facebookresearch/segment-anything
+```
+
+2. Set up the conda environment:
+```bash
+# Create and activate the environment
+conda env create -f environment.yml
+conda activate drone
+```
+
+3. Download required model files:
+   - [Depth-Anything-V2-Base model](https://huggingface.co/depth-anything/Depth-Anything-V2-Base/resolve/main/depth_anything_v2_vitb.pth?download=true)
+   - [SAM ViT-B model](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth)
+
+   Place both model files in the `~/tbp/tbp.drone/models/` directory.
+
+4. For macOS users (especially with Apple Silicon), set this environment variable:
+```bash
+export PYTORCH_ENABLE_MPS_FALLBACK=1
+```
+
+## Sample Dataset Structure
+
+The sample dataset is located in `dataset/potted_meat_can_v4/`. It contains 12 different views of a potted meat can, taken at 30-degree increments (folders 0 through 11). This dataset is designed for testing vision processing pipelines before deploying on the actual drone.
+
+Each view folder (0-11) contains:
+- `image.png`: Original image of the potted meat can
+- `bbox.png`: Image with bounding box visualization overlaid
+- `bbox.json`: JSON file containing bounding box coordinates in pixels:
+  ```json
+  {
+      "spam_can": [x1, y1, x2, y2],  // Top-left and bottom-right coordinates
+      "aruco": [x1, y1, x2, y2]      // ArUco marker coordinates (optional)
+  }
+  ```
+
 ## Project Structure
 
-The vision-related code is organized as follows:
 ```
 src/
   vision/
     __init__.py              # Main package interface
-    point_cloud.py           # Main interface for 3D point cloud generation
-    depth_processing/        # Implementation details
+    point_cloud.py           # 3D point cloud generation interface
+    depth_processing/        # Depth estimation implementation
       __init__.py
-      depth_estimator.py     # Depth estimation using Depth Anything V2
-      object_segmenter.py    # Object segmentation using SAM
+      depth_estimator.py     # Uses Depth Anything V2
+      object_segmenter.py    # Uses Segment Anything Model (SAM)
+    landmark_detection/      # ArUco marker processing
+      aruco_detection.py     # Marker detection and pose estimation
+
+dataset/
+  potted_meat_can_v4/       # Test dataset
+    0/                      # Views at 30° increments
+    1/
+    ...
+    11/
 ```
 
-The main interface you'll interact with is `DepthTo3DLocations` from the `vision` package. The depth estimation and segmentation implementations are internal details handled by the `depth_processing` subpackage.
+## Vision Processing Pipeline
 
-## Estimating Depth using Depth-Anything-v2
+### Quick Start
 
-[Depth-Anythin-v2 Github Repo](https://github.com/DepthAnything/Depth-Anything-V2)
+To test the pipeline with a sample image:
 
-1. Get the code via `git clone`
+1. Place a test image named `picture.png` in the tbp.drone directory
+2. Run the processing script using either method:
+
 ```bash
+# Option 1: From parent directory
 cd ~/tbp
-git clone https://github.com/DepthAnything/Depth-Anything-V2
-# Note: tbp.drone is at ~/tbp/tbp.drone
-```
-2. Download the Depth-Anything-V2-Base model from [here](https://huggingface.co/depth-anything/Depth-Anything-V2-Base/resolve/main/depth_anything_v2_vitb.pth?download=true) 
-**Note**: There are bigger models, but we have to run on CPU, so `Base` is a good starting point. 
-**Note**: You will get error for the line in `dpt.py`:
-```python
-DEVICE = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
-# Replace with the following line
-DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-```
-This is because `torch.backends.mps.is_available()` is not available in our `torch` version (v1.11.0) because of our Python 3.8 dependency. So we cannot take advantage of `mps` in our Macbook Pros. 
-
-I have already copied and pasted their requirements into our `environment.yml` so you don't need to install anything. Do update your `drone` conda environment if you have already installed it. 
-
-> [!Note]
-
-Before running any depth estimation tasks, set the following environment variable:
-```bash
-export PYTORCH_ENABLE_MPS_FALLBACK=1
-```
-This is required because some operations in the Depth Anything model are not yet supported in MPS (Metal Performance Shaders) and need to fall back to CPU. Without this setting, you may encounter runtime errors.
-
-
-## Object Segmentation using Segment Anything Model (SAM)
-
-[Segment Anything Model Github Repo](https://github.com/facebookresearch/segment-anything)
-
-1. Get the code via `git clone`
-```bash
-cd ~/tbp
-git clone https://github.com/facebookresearch/segment-anything
-# Note: tbp.drone is at ~/tbp/tbp.drone
-```
-
-2. Download the SAM ViT-B model from [here](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth)
-**Note**: We're using the ViT-B model as it provides a good balance between performance and resource usage when running on CPU.
-
-The model should be placed in the `~/tbp/tbp.drone/models/` directory as `sam_vit_b_01ec64.pth`.
-
-The requirements for SAM have already been added to our `environment.yml`, so you don't need to install anything additional. Just make sure your `drone` conda environment is up to date.
-
-## Combined Depth Estimation and Object Segmentation
-
-The project includes modules for depth estimation and object segmentation in the `src/vision` package. The main interface is the `DepthTo3DLocations` class which combines depth estimation and segmentation to create 3D point clouds.
-
-### Usage
-
-```bash
-# 1. Make sure you have a `picture.png` in tbp.drone directory before running
-
-# The below script will:
-# - Generate a 3D point cloud with semantic labels
-# - Save visualization as pointcloud.png
-
-# Option 1: Run from parent directory
-cd ~/tbp  # Go to parent directory containing tbp.drone
 PYTHONPATH=$PWD python -m tbp.drone.src.vision.point_cloud
 
-# Option 2: Run from tbp.drone directory
+# Option 2: From project directory
 cd ~/tbp/tbp.drone
 PYTHONPATH=~/tbp python -m src.vision.point_cloud
 ```
 
-Or you can write your own python file and feed in any image:
+The script will:
+- Generate a 3D point cloud with semantic labels
+- Save visualization as `pointcloud.png`
+
+### Using the Pipeline in Your Code
+
+#### Basic Point Cloud Generation
 
 ```python
 from tbp.drone.src.vision import DepthTo3DLocations
 
-# Initialize the processor (default max_depth is 100.0)
-point_cloud_generator = DepthTo3DLocations()
+# Initialize processor (default max_depth=100.0 meters)
+processor = DepthTo3DLocations()
 
-# Process an image with a point prompt
-# You can specify where to segment the object using input points
-center_point = [(image_width/2, image_height/2)]  # Point in center of image
+# Process image with a center point prompt
+image_width, image_height = 960, 720  # Adjust to your image size
+center_point = [(image_width/2, image_height/2)]
 center_label = [1]  # 1 indicates foreground
 
-points_3d = point_cloud_generator(
+points_3d = processor(
     "path/to/image.png",
     input_points=center_point,
     input_labels=center_label
 )
 ```
 
-The module combines both Depth-Anything-V2 and SAM to:
-1. Estimate depth for the entire image
-2. Segment objects of interest
-3. Convert the depth and segmentation information into a 3D point cloud
-4. Set the depth of background regions (non-object areas) to a maximum value (default: 100.0)
-
-This is particularly useful for drone navigation where you want to focus on the depth of specific objects while treating the background as far away.
-
-## Using ArUco Detection and Point Cloud Generation
-
-### ArUco Marker Detection
-
-The `ArucoDetector` class can be used to detect ArUco markers in images and estimate camera pose. Here's how to use it:
+#### ArUco Marker Detection
 
 ```python
 from tbp.drone.src.vision.landmark_detection.aruco_detection import ArucoDetector
+import cv2
 
-# Initialize detector (marker_size is the physical size of your ArUco marker in meters)
+# Initialize detector (specify physical marker size)
 detector = ArucoDetector(marker_size=0.05)  # 5cm marker
 
-# Load and process your image
-image = cv2.imread("path/to/your/image.png")
+# Process image
+image = cv2.imread("path/to/image.png")
 corners, ids, rejected = detector.detect(image, output_dir=".")
 
-# Draw markers and pose information on the image
+# Visualize results
 if ids is not None and len(ids) > 0:
-    # Draw detected markers and pose axes
     image = detector.draw_markers_with_pose(image, corners, ids)
-    
-    # Optional: Draw rejected markers
-    image = detector.draw_rejected_markers(image, rejected)
-    
-    # Save the result
-    cv2.imwrite("result.png", image)
+    cv2.imwrite("aruco_result.png", image)
 ```
 
-### 3D Point Cloud Generation
-
-The `DroneDepthTo3DLocations` class combines depth estimation and object segmentation to create 3D point clouds from images. Here's how to use it:
+#### Advanced Point Cloud Processing
 
 ```python
 from tbp.drone.src.vision.point_cloud import DroneDepthTo3DLocations
 import cv2
 import numpy as np
 
-# Initialize the processor
+# Initialize with specific parameters
 processor = DroneDepthTo3DLocations(
-    resolution=(720, 960),  # Height, Width format
-    max_depth=1.0,  # Maximum depth in meters
-    get_all_points=False  # True to include background points
+    resolution=(720, 960),  # Height, Width
+    max_depth=1.0,         # Maximum depth in meters
+    get_all_points=False   # True to include background
 )
 
-# Load your image to get dimensions
-image_path = "path/to/your/image.png"
+# Load image
+image_path = "path/to/image.png"
 image = cv2.imread(image_path)
 h, w = image.shape[:2]
 
-# Create point prompts for object segmentation
-# These points help identify the object of interest
+# Create multiple point prompts for better object segmentation
 input_points = np.array([
     [w/2, h/2],      # Center
     [w/2, h/2-50],   # Top
@@ -171,50 +165,34 @@ input_points = np.array([
     [w/2-50, h/2],   # Left
     [w/2+50, h/2]    # Right
 ])
-input_labels = np.array([1, 1, 1, 1, 1])  # All points are foreground
+input_labels = np.array([1, 1, 1, 1, 1])  # All foreground
 
-# Generate 3D point cloud
+# Generate point cloud
 points_3d = processor(
     image_path,
     input_points=input_points.tolist(),
     input_labels=input_labels.tolist()
 )
 
-# points_3d shape is (N, 6) where each point is [x, y, z, r, g, b]
-# Save the point cloud
-np.save("points_3d.npy", points_3d)
-
-# Optional: Save depth map and segmentation mask
-depth_map, rgb_image = processor.depth_estimator.estimate_depth(image_path)
-mask, _ = processor.object_segmenter.segment_image(
-    rgb_image,
-    input_points=input_points.tolist(),
-    input_labels=input_labels.tolist()
-)
-
-# Save depth map
-np.save("depthmap.npy", depth_map)
-depth_norm = (255 * (depth_map - depth_map.min()) / (depth_map.ptp() + 1e-8)).astype(np.uint8)
-cv2.imwrite("depthmap.png", depth_norm)
-
-# Save segmentation mask
-np.save("mask.npy", mask)
-mask_img = (mask * 255).astype(np.uint8)
-cv2.imwrite("mask.png", mask_img)
+# Save results
+np.save("points_3d.npy", points_3d)  # Point cloud
 ```
 
 ### Visualizing Results
 
-The point cloud can be visualized using either Plotly (interactive) or Open3D:
-
+#### Using Open3D (Static)
 ```python
-# Using Open3D
 from tbp.drone.src.vision.point_cloud import visualize_point_cloud_with_camera
 
-# Visualize point cloud (optionally with camera pose if ArUco markers were detected)
-visualize_point_cloud_with_camera(points_3d, camera_position=None, camera_rotation=None)
+visualize_point_cloud_with_camera(
+    points_3d,
+    camera_position=None,  # Optional camera pose
+    camera_rotation=None   # Optional camera orientation
+)
+```
 
-# If you have Plotly installed, you can also create an interactive HTML visualization:
+#### Using Plotly (Interactive)
+```python
 import plotly.graph_objs as go
 import plotly.io as pio
 
@@ -236,25 +214,36 @@ fig = go.Figure(data=[
 pio.write_html(fig, file="pointcloud_3d.html")
 ```
 
-### Important Notes
+## Troubleshooting
 
-1. For ArUco detection:
-   - The marker size must match the physical size of your printed ArUco markers
-   - The camera must be calibrated (camera matrix and distortion coefficients)
-   - Good lighting and marker visibility are essential for accurate detection
+1. **Model Loading Issues**
+   - Verify model files are in `~/tbp/tbp.drone/models/`
+   - Check file permissions
+   - Ensure correct model versions:
+     - SAM: `sam_vit_b_01ec64.pth`
+     - Depth-Anything: `depth_anything_v2_vitb.pth`
 
-2. For point cloud generation:
-   - The input image should be well-lit and in focus
-   - The object of interest should be clearly visible
-   - Point prompts help identify the object for segmentation
-   - The depth estimation works best for indoor scenes within a few meters
+2. **macOS/Apple Silicon Issues**
+   - Set `export PYTORCH_ENABLE_MPS_FALLBACK=1`
+   - Use Python 3.8 for compatibility
+   - Update PyTorch if needed: `pip install --upgrade torch`
 
-3. System requirements:
-   - Make sure you have all required models downloaded:
-     - SAM ViT-B model (`sam_vit_b_01ec64.pth`)
-     - Depth-Anything-V2-Base model (`depth_anything_v2_vitb.pth`)
-   - For Apple Silicon users, remember to set:
-     ```bash
-     export PYTORCH_ENABLE_MPS_FALLBACK=1
-     ```
+3. **ArUco Detection Problems**
+   - Ensure good lighting conditions
+   - Check marker size matches physical size
+   - Verify marker is clearly visible in image
+   - Confirm camera calibration parameters
+
+4. **Point Cloud Quality**
+   - Use well-lit, focused images
+   - Adjust `max_depth` parameter if needed
+   - Try multiple point prompts for better segmentation
+   - Check input image resolution matches processor settings
+
+## Performance Notes
+
+- Processing time varies with image size and hardware
+- CPU-only processing is significantly slower than GPU
+- Memory usage increases with point cloud density
+- Consider downscaling large images for faster processing
 
