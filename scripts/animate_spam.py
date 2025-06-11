@@ -1,15 +1,12 @@
-import glob
-import os
+"""Script for animating the rotating spam can."""
 from pathlib import Path
-from typing import List, Optional
 
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
-import natsort
 import numpy as np
 from PIL import Image
 
-image_dir = Path.home() / "tbp/data/worldimages/drone/potted_meat_can_v4"
+image_dir = Path(__file__).parent.parent / "dataset/potted_meat_can_v4"
 output_path = image_dir / "animation.gif"
 fps = 3
 loop = False
