@@ -9,7 +9,7 @@
 
 ## Project Overview
 
-We've developed an interface between the DJI Tello drone and Monty framework for autonomous object recognition and tracking.
+We're developing an interface between the DJI Tello drone and the Monty framework for autonomous object recognition and tracking.
 
 > **Warning**  
 > This project is currently under development. Below are detailed instructions for getting started and planned next steps.
@@ -67,11 +67,11 @@ conda activate drone
 This project is currently a work in progress. Here's what you can do with the current codebase:
 
 ### 1. Sample Dataset Processing
-- A sample dataset is provided under `dataset/potted_meat_can_v4` for development and testing. It is an "offline" dataset that was created under controlled conditions and with known ground-truth object and drone locations and poses.
+- A sample dataset is provided under `dataset/potted_meat_can_v4` for development and testing. It is an "offline" dataset that was created under controlled conditions and with known ground-truth object and drone poses.
 - Follow the detailed instructions in [data_processing.md](data_processing.md) to:
   - Process the raw images
-  - Generate depth information
-  - Add precomputed agent positions to the dataset.
+  - Generate and calibrate estimated depth maps
+  - Regenerate and visualize agent positions
   - Create 3D point clouds that can be used with Monty for object recognition
 
 ### 2. Available Components
@@ -85,7 +85,7 @@ This project is currently a work in progress. Here's what you can do with the cu
 - The project is not yet running end-to-end
 - Main challenges we're working on:
   - Retrieving accurate location and pose data from drone imagery
-  - Constructing coherent 3D point clouds from multiple viewpoints and mapping them into world coordinates.    
+  - Constructing coherent 3D point clouds from multiple viewpoints and mapping them into a common reference frame. This capability is built-in to Monty, but it requires accurate depth data we do not currently possess.
   - Building out the environment/dataset/dataloader pipeline. Until this is complete, we won't have runnable monty experiments. In particular, we need to implement the 'saccade-over-image' behavior used in other environments.
   - Integration with Monty's object recognition pipeline
 
