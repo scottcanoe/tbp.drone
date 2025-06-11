@@ -1,17 +1,19 @@
-import datetime
+"""Drone environment classes.
+
+Note: `DroneEnvironment` is incomplete. It implements drone-specific interfaces and
+loading of the synthetic dataset, but it does not yet saccade over regions in
+one of the pre-defined observation images.
+"""
+
 import json
 import os
-import time
-from collections import defaultdict
 from dataclasses import dataclass
-from numbers import Number
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import Dict, Optional, Tuple
 
 import imageio
 import numpy as np
 import quaternion
-from djitellopy import Tello
 
 from tbp.drone.src.actions import (
     Action,
@@ -548,11 +550,6 @@ class DroneImageEnvironment(DroneEnvironment):
         depth = np.load(stepisode_dir / "depth.npy")
         data["depth"] = self.depth_scale_factor * depth
 
-        # Drone state
-        # with open(stepisode_dir / "drone_state.json", "r") as f:
-        #     drone_state = json.load(f)
-        # data["drone_state"] = drone_state
-
         # Agent state
         with open(stepisode_dir / "agent_state.json", "r") as f:
             agent_state = json.load(f)
@@ -564,25 +561,6 @@ class DroneImageEnvironment(DroneEnvironment):
         data["bbox"] = bbox
 
         return data
-
-        # state = self._agent.state_dict()
-        # # Set data paths
-        # current_depth_path = (
-        #     self.data_path + f"{self.current_scene}/depth_{self.scene_version}.data"
-        # )
-        # current_rgb_path = (
-        #     self.data_path + f"{self.current_scene}/rgb_{self.scene_version}.png"
-        # )
-        # # Load & process data
-        # current_rgb_image = self.load_rgb_data(current_rgb_path)
-        # height, width, _ = current_rgb_image.shape
-        # current_depth_image = self.load_depth_data(current_depth_path, height, width)
-        # current_depth_image = self.process_depth_data(current_depth_image)
-        # # set start location to center of image
-        # # TODO: find object if not in center
-        # obs_shape = current_depth_image.shape
-        # start_location = [obs_shape[0] // 2, obs_shape[1] // 2]
-        # return current_depth_image, current_rgb_image, start_location
 
     def get_3d_scene_point_cloud(self):
         """Turn 2D depth image into 3D pointcloud using DepthTo3DLocations.
