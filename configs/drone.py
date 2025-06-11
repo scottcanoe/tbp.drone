@@ -59,69 +59,69 @@ from tbp.monty.frameworks.models.sensor_modules import (
 
 
 # The below is modeled after `supervised_pre_training_base from benchmarks/configs/pretraining_experiments.py`
-# pretrain_drone_config = dict(
-#     experiment_class=MontySupervisedObjectPretrainingExperiment,
-#     experiment_args=ExperimentArgs(
-#         do_eval=False,
-#         n_train_epochs=1,
-#     ),
-#     logging_config=PretrainLoggingConfig(
-#         output_dir=Path("~/tbp/tbp.drone/pretraining").expanduser(),
-#     ),
-#     monty_config=PatchAndViewMontyConfig(
-#         monty_args=MontyArgs(num_exploratory_steps=500),
-#         learning_module_configs=dict(
-#             learning_module_0=dict(
-#                 learning_module_class=DisplacementGraphLM,
-#                 learning_module_args=dict(
-#                     k=10,
-#                     match_attribute="displacement",
-#                     tolerance=np.ones(3) * 0.0001,
-#                     graph_delta_thresholds=dict(
-#                         patch=dict(
-#                             distance=0.001,
-#                             # Only first pose vector (point normal) is currently used
-#                             pose_vectors=[np.pi / 8, np.pi * 2, np.pi * 2],
-#                             principal_curvatures_log=[1, 1],
-#                             hsv=[0.1, 1, 1],
-#                         )
-#                     ),
-#                 ),
-#             ),
-#         ),
-#         motor_system_config=MotorSystemConfigNaiveScanSpiral(
-#             motor_system_args=dict(
-#                 policy_class=NaiveScanPolicy,
-#                 policy_args=make_naive_scan_policy_config(step_size=5, agent_id="agent_id_0"),
-#             )
-#         ),
-#     ),
-#     dataset_class=DroneEnvironmentDataset,
-#     dataset_args=DroneDatasetArgs(),
-#     train_dataloader_class=ED.EnvironmentDataLoaderPerObject,
-#     train_dataloader_args=EnvironmentDataloaderPerObjectArgs(
-#         object_names=get_object_names_by_idx(0, 1, object_list=["potted_meat_can"]),
-#         object_init_sampler=PredefinedObjectInitializer(rotations=[np.array([0,0,0])]),
-#     ),
-# )
+pretrain_drone_config = dict(
+    experiment_class=MontySupervisedObjectPretrainingExperiment,
+    experiment_args=ExperimentArgs(
+        do_eval=False,
+        n_train_epochs=1,
+    ),
+    logging_config=PretrainLoggingConfig(
+        output_dir=Path("~/tbp/tbp.drone/pretraining").expanduser(),
+    ),
+    monty_config=PatchAndViewMontyConfig(
+        monty_args=MontyArgs(num_exploratory_steps=500),
+        learning_module_configs=dict(
+            learning_module_0=dict(
+                learning_module_class=DisplacementGraphLM,
+                learning_module_args=dict(
+                    k=10,
+                    match_attribute="displacement",
+                    tolerance=np.ones(3) * 0.0001,
+                    graph_delta_thresholds=dict(
+                        patch=dict(
+                            distance=0.001,
+                            # Only first pose vector (point normal) is currently used
+                            pose_vectors=[np.pi / 8, np.pi * 2, np.pi * 2],
+                            principal_curvatures_log=[1, 1],
+                            hsv=[0.1, 1, 1],
+                        )
+                    ),
+                ),
+            ),
+        ),
+        motor_system_config=MotorSystemConfigNaiveScanSpiral(
+            motor_system_args=dict(
+                policy_class=NaiveScanPolicy,
+                policy_args=make_naive_scan_policy_config(step_size=5, agent_id="agent_id_0"),
+            )
+        ),
+    ),
+    dataset_class=DroneEnvironmentDataset,
+    dataset_args=DroneDatasetArgs(),
+    train_dataloader_class=ED.EnvironmentDataLoaderPerObject,
+    train_dataloader_args=EnvironmentDataloaderPerObjectArgs(
+        object_names=get_object_names_by_idx(0, 1, object_list=["potted_meat_can"]),
+        object_init_sampler=PredefinedObjectInitializer(rotations=[np.array([0,0,0])]),
+    ),
+)
 
 # The below is modeled after `supervised_pre_training_base from benchmarks/configs/pretraining_experiments.py`
-# drone_test = dict(
-#     experiment_class=MontyObjectRecognitionExperiment,
-#     experiment_args=EvalExperimentArgs(),
-#     logging_config=DroneEvalLoggingConfig(run_name="drone_test"),
-#     monty_config=DroneEvalMontyConfig(),
-#     dataset_class=DroneEnvironmentDataset,
-#     dataset_args=DroneDatasetArgs(),
-#     eval_dataloader_class=DroneDataLoader,
-#     eval_dataloader_args=DroneEvalDataLoaderArgs(
-#         object_name="potted_meat_can",
-#         actions=[TakeOff(), MoveLeft(0.2), MoveRight(0.2)],
-#     ),
-# )
+drone_test = dict(
+    experiment_class=MontyObjectRecognitionExperiment,
+    experiment_args=EvalExperimentArgs(),
+    logging_config=DroneEvalLoggingConfig(run_name="drone_test"),
+    monty_config=DroneEvalMontyConfig(),
+    dataset_class=DroneEnvironmentDataset,
+    dataset_args=DroneDatasetArgs(),
+    eval_dataloader_class=DroneDataLoader,
+    eval_dataloader_args=DroneEvalDataLoaderArgs(
+        object_name="potted_meat_can",
+        actions=[TakeOff(), MoveLeft(0.2), MoveRight(0.2)],
+    ),
+)
 
 
 CONFIGS = {
-    # "pretrain_drone": pretrain_drone_config,
-    # "drone_test": drone_test,
+    "pretrain_drone": pretrain_drone_config,
+    "drone_test": drone_test,
 }
